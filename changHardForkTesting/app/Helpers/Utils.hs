@@ -34,42 +34,42 @@ after the supplied function @f@ returns.
 -}
 workspace :: (MonadTest m, MonadIO m, GHC.HasCallStack) => FilePath -> (FilePath -> m ()) -> m ()
 workspace prefixPath f = GHC.withFrozenCallStack $ do
-  systemTemp <- case IO.os of
-    "darwin" -> pure "/tmp"
-    _ -> H.evalIO IO.getCanonicalTemporaryDirectory
-  maybeKeepWorkspace <- H.evalIO $ IO.lookupEnv "KEEP_WORKSPACE"
-  let systemPrefixPath = systemTemp <> "/" <> prefixPath
-  H.evalIO $ IO.createDirectoryIfMissing True systemPrefixPath
-  ws <- H.evalIO $ IO.createTempDirectory systemPrefixPath "test"
-  H.annotate $ "Workspace: " <> ws
-  liftIO $ IO.writeFile (ws <> "/module") H.callerModuleName
-  f ws
-  when (IO.os /= "mingw32" && maybeKeepWorkspace /= Just "1") $ do
-    H.evalIO $ IO.removeDirectoryRecursive ws
+    systemTemp <- case IO.os of
+        "darwin" -> pure "/tmp"
+        _ -> H.evalIO IO.getCanonicalTemporaryDirectory
+    maybeKeepWorkspace <- H.evalIO $ IO.lookupEnv "KEEP_WORKSPACE"
+    let systemPrefixPath = systemTemp <> "/" <> prefixPath
+    H.evalIO $ IO.createDirectoryIfMissing True systemPrefixPath
+    ws <- H.evalIO $ IO.createTempDirectory systemPrefixPath "test"
+    H.annotate $ "Workspace: " <> ws
+    liftIO $ IO.writeFile (ws <> "/module") H.callerModuleName
+    f ws
+    when (IO.os /= "mingw32" && maybeKeepWorkspace /= Just "1") $ do
+        H.evalIO $ IO.removeDirectoryRecursive ws
 
 {- | Read file text envelope as a specific type (e.g. C.VerificationKey C.GenesisUTxOKey)
   and throw error on failure
 -}
 readAs :: (C.HasTextEnvelope a, MonadIO m, MonadTest m) => C.AsType a -> C.File content 'C.In -> m a
 readAs as path = do
-  H.annotate $ C.unFile path
-  H.leftFailM . liftIO $ C.readFileTextEnvelope as path
+    H.annotate $ C.unFile path
+    H.leftFailM . liftIO $ C.readFileTextEnvelope as path
 
 -- | Same as readAs but return Nothing on error
-maybeReadAs
-  :: (C.HasTextEnvelope a, MonadIO m, MonadTest m) => C.AsType a -> C.File content 'C.In -> m (Maybe a)
+maybeReadAs ::
+    (C.HasTextEnvelope a, MonadIO m, MonadTest m) => C.AsType a -> C.File content 'C.In -> m (Maybe a)
 maybeReadAs as file@(C.File fp) = do
-  H.annotate fp
-  maybeEither . liftIO $ C.readFileTextEnvelope as file
+    H.annotate fp
+    maybeEither . liftIO $ C.readFileTextEnvelope as file
   where
     maybeEither m = m >>= return . either (const Nothing) Just
 
 -- | Concatenate Just Strings. Useful for aggregating test failures.
 concatMaybes :: (MonadTest m) => [Maybe String] -> m (Maybe String)
 concatMaybes mList =
-  let justStrings = map (maybe "" id) mList
-      withLineBreaks = mconcat . intersperse "\n\n" $ justStrings
-   in if all null justStrings then pure Nothing else pure $ Just withLineBreaks
+    let justStrings = map (maybe "" id) mList
+        withLineBreaks = mconcat . intersperse "\n\n" $ justStrings
+     in if all null justStrings then pure Nothing else pure $ Just withLineBreaks
 
 -- | Convert a 'POSIXTime' to the number of milliseconds since the Unix epoch.
 posixToMilliseconds :: Time.POSIXTime -> Integer

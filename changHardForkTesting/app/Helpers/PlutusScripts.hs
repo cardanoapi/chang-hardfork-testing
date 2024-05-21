@@ -55,166 +55,166 @@ plutusL3 = C.PlutusScriptLanguage C.PlutusScriptV3
  Provide either the script or TxIn for reference script to include in witness.
  Zero execution units can only be used with convenience build function.
 -}
-mintScriptWitness
-  :: C.ShelleyBasedEra era
-  -> C.ScriptLanguage lang
-  -> Either (C.PlutusScript lang) C.TxIn -- either script or reference to script
-  -> C.HashableScriptData
-  -> C.ScriptWitness C.WitCtxMint era
+mintScriptWitness ::
+    C.ShelleyBasedEra era ->
+    C.ScriptLanguage lang ->
+    Either (C.PlutusScript lang) C.TxIn -> -- either script or reference to script
+    C.HashableScriptData ->
+    C.ScriptWitness C.WitCtxMint era
 -- V1 script
 mintScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV1) eScript redeemer =
-  mintScriptWitness' era lang eScript redeemer defExecutionUnits
+    mintScriptWitness' era lang eScript redeemer defExecutionUnits
 -- V2 script
 mintScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Left script) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV2
-    (C.PScript script)
-    C.NoScriptDatumForMint
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV2
+        (C.PScript script)
+        C.NoScriptDatumForMint
+        redeemer
+        defExecutionUnits
 -- V2 reference script
 mintScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Right refTxIn) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV2
-    (C.PReferenceScript refTxIn Nothing)
-    C.NoScriptDatumForMint
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV2
+        (C.PReferenceScript refTxIn Nothing)
+        C.NoScriptDatumForMint
+        redeemer
+        defExecutionUnits
 -- V3 script
 mintScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Left script) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PScript script)
-    C.NoScriptDatumForMint
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PScript script)
+        C.NoScriptDatumForMint
+        redeemer
+        defExecutionUnits
 -- V3 reference script
 mintScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Right refTxIn) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PReferenceScript refTxIn Nothing)
-    C.NoScriptDatumForMint
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PReferenceScript refTxIn Nothing)
+        C.NoScriptDatumForMint
+        redeemer
+        defExecutionUnits
 
 -- Witness token mint with explicit execution units. Used when building raw txbody content.
-mintScriptWitness'
-  :: C.ShelleyBasedEra era
-  -> C.ScriptLanguage lang
-  -> Either (C.PlutusScript lang) C.TxIn -- either script or reference to script
-  -> C.HashableScriptData
-  -> C.ExecutionUnits
-  -> C.ScriptWitness C.WitCtxMint era
+mintScriptWitness' ::
+    C.ShelleyBasedEra era ->
+    C.ScriptLanguage lang ->
+    Either (C.PlutusScript lang) C.TxIn -> -- either script or reference to script
+    C.HashableScriptData ->
+    C.ExecutionUnits ->
+    C.ScriptWitness C.WitCtxMint era
 -- V1 script
 mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV1) (Left script) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV1
-    (C.PScript script)
-    C.NoScriptDatumForMint
-    redeemer
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV1
+        (C.PScript script)
+        C.NoScriptDatumForMint
+        redeemer
 -- V2 script
 mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Left script) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV2
-    (C.PScript script)
-    C.NoScriptDatumForMint
-    redeemer
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV2
+        (C.PScript script)
+        C.NoScriptDatumForMint
+        redeemer
 -- V2 reference script
 mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Right refTxIn) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV2
-    (C.PReferenceScript refTxIn Nothing)
-    C.NoScriptDatumForMint
-    redeemer
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV2
+        (C.PReferenceScript refTxIn Nothing)
+        C.NoScriptDatumForMint
+        redeemer
 -- V3 script
 mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Left script) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PScript script)
-    C.NoScriptDatumForMint
-    redeemer
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PScript script)
+        C.NoScriptDatumForMint
+        redeemer
 -- V3 reference script
 mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Right refTxIn) redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PReferenceScript refTxIn Nothing)
-    C.NoScriptDatumForMint
-    redeemer
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PReferenceScript refTxIn Nothing)
+        C.NoScriptDatumForMint
+        redeemer
 
-spendScriptWitness
-  :: C.ShelleyBasedEra era
-  -> C.ScriptLanguage lang
-  -> Either (C.PlutusScript lang) C.TxIn -- either script or reference to script
-  -> C.ScriptDatum C.WitCtxTxIn
-  -> C.HashableScriptData
-  -> C.ScriptWitness C.WitCtxTxIn era
+spendScriptWitness ::
+    C.ShelleyBasedEra era ->
+    C.ScriptLanguage lang ->
+    Either (C.PlutusScript lang) C.TxIn -> -- either script or reference to script
+    C.ScriptDatum C.WitCtxTxIn ->
+    C.HashableScriptData ->
+    C.ScriptWitness C.WitCtxTxIn era
 -- V1 script
 spendScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Left script) datumWit redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PScript script)
-    datumWit
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PScript script)
+        datumWit
+        redeemer
+        defExecutionUnits
 -- V2 script
 spendScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Left script) datumWit redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV2
-    (C.PScript script)
-    datumWit
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV2
+        (C.PScript script)
+        datumWit
+        redeemer
+        defExecutionUnits
 -- V2 reference script
 spendScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Right refTxIn) datumWit redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV2
-    (C.PReferenceScript refTxIn Nothing)
-    datumWit
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV2
+        (C.PReferenceScript refTxIn Nothing)
+        datumWit
+        redeemer
+        defExecutionUnits
 -- V3 script
 spendScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Left script) datumWit redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PScript script)
-    datumWit
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PScript script)
+        datumWit
+        redeemer
+        defExecutionUnits
 -- V3 reference script
 spendScriptWitness era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Right refTxIn) datumWit redeemer = do
-  C.PlutusScriptWitness
-    (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
-    C.PlutusScriptV3
-    (C.PReferenceScript refTxIn Nothing)
-    datumWit
-    redeemer
-    defExecutionUnits
+    C.PlutusScriptWitness
+        (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
+        C.PlutusScriptV3
+        (C.PReferenceScript refTxIn Nothing)
+        datumWit
+        redeemer
+        defExecutionUnits
 
 -- | Produce ScriptLanguageInEra. Throw error when era doesn't support the script language.
-maybeScriptWitness
-  :: C.ShelleyBasedEra era
-  -> C.ScriptLanguage l
-  -> Maybe (C.ScriptLanguageInEra l era)
-  -> C.ScriptLanguageInEra l era
+maybeScriptWitness ::
+    C.ShelleyBasedEra era ->
+    C.ScriptLanguage l ->
+    Maybe (C.ScriptLanguageInEra l era) ->
+    C.ScriptLanguageInEra l era
 maybeScriptWitness era lang Nothing =
-  error $
-    "Era "
-      ++ show era
-      ++ " does not support script language "
-      ++ show lang
+    error $
+        "Era "
+            ++ show era
+            ++ " does not support script language "
+            ++ show lang
 maybeScriptWitness _ _ (Just p) = p
 
 -- | V1 Plutus Script to general Script, Needed for producing reference script.
@@ -246,7 +246,7 @@ fromPolicyId (C.PolicyId hash) = PlutusV1.CurrencySymbol . BI.toBuiltin $ C.seri
 
 writeSerialisedScript :: (C.HasTextEnvelope ps) => FilePath -> ps -> IO ()
 writeSerialisedScript filename plutusScript = do
-  let dir = "serialised-plutus-scripts"
-      file = C.File $ dir ++ "/" ++ filename ++ ".plutus"
-  createDirectoryIfMissing True dir
-  void $ C.writeFileTextEnvelope file Nothing plutusScript
+    let dir = "serialised-plutus-scripts"
+        file = C.File $ dir ++ "/" ++ filename ++ ".plutus"
+    createDirectoryIfMissing True dir
+    void $ C.writeFileTextEnvelope file Nothing plutusScript

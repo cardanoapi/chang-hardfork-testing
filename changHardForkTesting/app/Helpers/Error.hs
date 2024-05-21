@@ -4,23 +4,23 @@
 
 -- TODO: use this class for all errors
 module Helpers.Error (
-  Error (..),
-  TimedOut (..),
+    Error (..),
+    TimedOut (..),
 ) where
 
 import System.Process.Internals (PHANDLE)
 
 class Error e where
-  displayError :: e -> String
+    displayError :: e -> String
 
 instance Error () where
-  displayError () = ""
+    displayError () = ""
 
 data TimedOut = ProcessExitTimedOut Int PHANDLE deriving (Show)
 
 instance Error TimedOut where
-  displayError (ProcessExitTimedOut t pid) =
-    "Timeout. Waited "
-      ++ show t
-      ++ "s in `cleanupTestnet` for process to exit. pid="
-      ++ show pid
+    displayError (ProcessExitTimedOut t pid) =
+        "Timeout. Waited "
+            ++ show t
+            ++ "s in `cleanupTestnet` for process to exit. pid="
+            ++ show pid
