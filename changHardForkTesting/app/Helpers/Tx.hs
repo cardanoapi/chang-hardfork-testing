@@ -14,12 +14,14 @@ import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Conway.Governance qualified as Conway
 import Cardano.Ledger.Era qualified as C
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Short (ShortByteString)
 import Data.Functor ((<&>))
 import Data.List (isInfixOf)
 import Data.Map qualified as Map
 import Data.OSet.Strict qualified as OSet
 import Data.Word (Word32)
+import Debug.Trace qualified as Debug
 import GHC.Stack qualified as GHC
 import Hedgehog (MonadTest)
 import Hedgehog.Extras.Test qualified as HE

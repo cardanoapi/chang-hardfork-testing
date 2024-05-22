@@ -84,8 +84,9 @@ executable changHardForkTesting
     Test.V3.Tests
     Test.V3.TestTree
     Utils
-    V3.VerifyKeccak
-    V3.VerifySchnorr
+    V3.Spend.VerifyBLS
+    V3.Spend.VerifyKeccak
+    V3.Spend.VerifySchnorr
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

@@ -3,7 +3,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module V3.VerifySchnorr where
+module V3.Spend.VerifySchnorr where
 
 import PlutusLedgerApi.V3
 import PlutusTx qualified

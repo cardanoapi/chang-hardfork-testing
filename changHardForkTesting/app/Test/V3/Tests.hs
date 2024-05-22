@@ -8,13 +8,7 @@ module Test.V3.Tests where
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley
 import Cardano.Api.Shelley qualified as C
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.ByteString.Char8 qualified as BS8
-import Data.Functor.Identity
-import Data.Maybe (fromJust)
-import Data.Time.Clock.POSIX qualified as Time
-import Debug.Trace qualified as Debug
-import GHC.IO (unsafePerformIO)
+import Control.Monad.IO.Class (MonadIO)
 import Hedgehog hiding (test)
 import Hedgehog.Gen
 import Helpers.Common (makeAddressWithStake, toShelleyBasedEra)
@@ -30,8 +24,9 @@ import PlutusTx.IsData.Class
 import Test.Gen.Cardano.Api.Typed (genTxOutValue, genValue)
 import Test.V3.DummyDataTypes
 import Utils
-import V3.VerifyKeccak qualified
-import V3.VerifySchnorr qualified as V3.VerifySchnorr
+import V3.Spend.VerifyBLS qualified as V3.Spend.VerifyBLS
+import V3.Spend.VerifyKeccak qualified as V3.Spend.VerifyKeccak
+import V3.Spend.VerifySchnorr qualified as V3.Spend.VerifySchnorr
 
 v3ScriptInfo :: NetworkId -> PlutusTx.CompiledCode a -> V3ScriptInfo
 v3ScriptInfo netId compiledCode = do
@@ -64,7 +59,7 @@ verifySchnorrSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
-        verifySchnorrInfo = v3ScriptInfo networkId V3.VerifySchnorr.validator
+        verifySchnorrInfo = v3ScriptInfo networkId V3.Spend.VerifySchnorr.validator
         collateral = Tx.txInsCollateral era [txIn]
         scripTxOut =
             Tx.txOutWithInlineDatum
@@ -132,7 +127,7 @@ verifyKeccak256ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectIn
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
-        verifyKeccakInfo = v3ScriptInfo networkId (V3.VerifyKeccak.validator v3VerifyKeccakParameter)
+        verifyKeccakInfo = v3ScriptInfo networkId (V3.Spend.VerifyKeccak.validator v3VerifyKeccakParameter)
         collateral = Tx.txInsCollateral era [txIn]
         scriptTxOut =
             Tx.txOutWithInlineDatum
@@ -167,6 +162,74 @@ verifyKeccak256ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectIn
                     (dataToHashableScriptData v3VerifyKeccakRedeemer)
         collateral = Tx.txInsCollateral era [txIn]
         -- TODO: add signer as extra witness to the transaction
+        redeemFromScript =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.scriptTxIn [scriptTxIn] scriptWitness
+                , C.txInsCollateral = collateral
+                , C.txOuts = [redeemTxOut]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
+    resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
+    txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 3_000_000)
+    Helpers.Test.assert "Funds Unlocked" txOutHasValue
+
+verifyBLS12G1EqualsForUtxoUnlockingTestInfo =
+    TestInfo
+        { testName = "verifyBLS12G1EqualsForUtxoUnlockingTest"
+        , testDescription =
+            "Verify bls12_381_G1_equals function for unlocking funds from a script."
+        , test = verifyBLS12G1EqualsForUtxoUnlockingTest
+        }
+
+verifyBLS12G1EqualsForUtxoUnlockingTest ::
+    (MonadIO m, MonadTest m) =>
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyBLS12G1EqualsForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+    era <- TN.eraFromOptionsM networkOptions
+    pv <- TN.pvFromOptions networkOptions
+    skeyAndAddress <- TN.w tempAbsPath networkId
+    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let sbe = toShelleyBasedEra era
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+    let
+        verifyBLSInfo = v3ScriptInfo networkId (V3.Spend.VerifyBLS.validator)
+        collateral = Tx.txInsCollateral era [txIn]
+        scriptTxOut =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 4_000_000)
+                (address verifyBLSInfo)
+                (dataToHashableScriptData blsG1Datum)
+        fundScriptAddress =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.pubkeyTxIns [txIn]
+                , C.txInsCollateral = collateral
+                , C.txOuts = [scriptTxOut]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
+    resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyBLSInfo) scriptTxIn "TN.getTxOutAtAddress"
+    txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
+    Helpers.Test.assert "Script has been funded" txOutHasValue
+    -- redeeming from script
+    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
+    let
+        redeemTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w2Address
+        scriptWitness =
+            C.ScriptWitness C.ScriptWitnessForSpending $
+                spendScriptWitness
+                    sbe
+                    (C.PlutusScriptLanguage C.PlutusScriptV3)
+                    (Left $ PlutusScriptSerialised (sbs verifyBLSInfo))
+                    C.InlineScriptDatum
+                    (dataToHashableScriptData blsG1Redeemer)
+        collateral = Tx.txInsCollateral era [txIn]
         redeemFromScript =
             (Tx.emptyTxBodyContent sbe pparams)
                 { C.txIns = Tx.scriptTxIn [scriptTxIn] scriptWitness

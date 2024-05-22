@@ -4,12 +4,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.1.0 #-}
 
-module V3.VerifyKeccak where
+module V3.Spend.VerifyKeccak where
 
 import PlutusCore.Version (plcVersion110)
 import PlutusLedgerApi.V3
-import PlutusLedgerApi.V3.Contexts (txSignedBy)
 import PlutusTx (liftCode)
 import PlutusTx qualified
 import PlutusTx.Builtins (modInteger)
