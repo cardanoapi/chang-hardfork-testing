@@ -84,7 +84,7 @@ executable changHardForkTesting
     Test.V3.Tests
     Test.V3.TestTree
     Utils
-    V3.Spend.VerifyBLS
+    V3.Spend.VerifyBLS12G1
     V3.Spend.VerifyKeccak
     V3.Spend.VerifySchnorr
 

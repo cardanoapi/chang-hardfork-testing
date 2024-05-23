@@ -20,11 +20,9 @@ import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
 import PlutusLedgerApi.Common (serialiseCompiledCode)
 import PlutusTx.Code qualified as PlutusTx
-import PlutusTx.IsData.Class
-import Test.Gen.Cardano.Api.Typed (genTxOutValue, genValue)
 import Test.V3.DummyDataTypes
 import Utils
-import V3.Spend.VerifyBLS qualified as V3.Spend.VerifyBLS
+import V3.Spend.VerifyBLS12G1 qualified as V3.Spend.VerifyBLS12G1
 import V3.Spend.VerifyKeccak qualified as V3.Spend.VerifyKeccak
 import V3.Spend.VerifySchnorr qualified as V3.Spend.VerifySchnorr
 
@@ -175,20 +173,20 @@ verifyKeccak256ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectIn
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 3_000_000)
     Helpers.Test.assert "Funds Unlocked" txOutHasValue
 
-verifyBLS12G1EqualsForUtxoUnlockingTestInfo =
+verifyBLS12G1ForUtxoUnlockingTestInfo =
     TestInfo
-        { testName = "verifyBLS12G1EqualsForUtxoUnlockingTest"
+        { testName = "verifyBLS12G1ForUtxoUnlockingTest"
         , testDescription =
-            "Verify bls12_381_G1_equals function for unlocking funds from a script."
-        , test = verifyBLS12G1EqualsForUtxoUnlockingTest
+            "Verify bls12_381_G1 functions for unlocking funds from a script."
+        , test = verifyBLS12G1ForUtxoUnlockingTest
         }
 
-verifyBLS12G1EqualsForUtxoUnlockingTest ::
+verifyBLS12G1ForUtxoUnlockingTest ::
     (MonadIO m, MonadTest m) =>
     TN.TestEnvironmentOptions era ->
     TestParams era ->
     m (Maybe String)
-verifyBLS12G1EqualsForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+verifyBLS12G1ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
@@ -196,7 +194,7 @@ verifyBLS12G1EqualsForUtxoUnlockingTest networkOptions TestParams{localNodeConne
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
-        verifyBLSInfo = v3ScriptInfo networkId (V3.Spend.VerifyBLS.validator)
+        verifyBLSInfo = v3ScriptInfo networkId (V3.Spend.VerifyBLS12G1.validator)
         collateral = Tx.txInsCollateral era [txIn]
         scriptTxOut =
             Tx.txOutWithInlineDatum

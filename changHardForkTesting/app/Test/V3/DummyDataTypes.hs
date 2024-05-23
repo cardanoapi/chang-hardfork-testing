@@ -2,12 +2,17 @@
 
 module Test.V3.DummyDataTypes where
 
+import Cardano.Crypto.EllipticCurve.BLS12_381 qualified as BLSBindings
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Char8 qualified as BS8
 import Helpers.PlutusScripts (bytesFromHex)
+import Numeric (showHex)
 import PlutusLedgerApi.V3 (PubKeyHash (..), toBuiltin)
 import PlutusTx.Builtins
 import PlutusTx.Builtins.Class qualified as BI
-import V3.Spend.VerifyBLS qualified as VerifyBLS
+import V3.Spend.VerifyBLS12G1 qualified as VerifyBLS12G1
 import V3.Spend.VerifyKeccak qualified as VerifyKeccak
 import V3.Spend.VerifySchnorr qualified as VerifySchnorr
 
@@ -41,12 +46,29 @@ v3VerifyKeccakRedeemer =
         , VerifyKeccak.signature = BI.toBuiltin $ bytesFromHex "b32262bd655a2bc56e3a6cf9ccc5d7f49ed8d007997bb125b92e4ea30eb74c9b49fd3d18f8f72614b25802a1aa2a6b67d3e478d416da821502f1ada231cb00071c"
         }
 
-blsG1Datum :: VerifyBLS.BLSDatum
+blsG1Datum :: VerifyBLS12G1.BLSDatum
 blsG1Datum =
-    VerifyBLS.BLSDatum
-        { VerifyBLS.point1 = BI.toBuiltin $ bytesFromHex "8c18eaa3c86ab258d1a24375c2189c69051a7a1aa517ba144d59840db1d38d6981a886479af77292a3b0af18a44dbf5d"
-        , VerifyBLS.point2 = BI.toBuiltin $ bytesFromHex "8825e51257bd8c9ff8dc605ea0c35fc00802a1b77bdcb815e720ebe8e439c2ddede9e12fd109f713f3d7b471fda5f900"
+    VerifyBLS12G1.BLSDatum
+        { VerifyBLS12G1.point1 = BI.toBuiltin $ bytesFromHex "8c18eaa3c86ab258d1a24375c2189c69051a7a1aa517ba144d59840db1d38d6981a886479af77292a3b0af18a44dbf5d"
+        , VerifyBLS12G1.point2 = BI.toBuiltin $ bytesFromHex "8825e51257bd8c9ff8dc605ea0c35fc00802a1b77bdcb815e720ebe8e439c2ddede9e12fd109f713f3d7b471fda5f900"
         }
 
-blsG1Redeemer :: BuiltinByteString
-blsG1Redeemer = BI.toBuiltin $ bytesFromHex "ac176c975819ce26b3dfae9f4083bd5b370dd1958e9361472562ea70473b96465f7dc85faa26c91adac824c6d9b9e7a0"
+blsG1Redeemer :: VerifyBLS12G1.BLSRedeemer
+blsG1Redeemer =
+    VerifyBLS12G1.BLSRedeemer
+        { VerifyBLS12G1.addition =
+            BI.toBuiltin $ bytesFromHex "ac176c975819ce26b3dfae9f4083bd5b370dd1958e9361472562ea70473b96465f7dc85faa26c91adac824c6d9b9e7a0"
+        , VerifyBLS12G1.multiplication =
+            BI.toBuiltin $ bytesFromHex "a5a8aee0dcac330bd6fb1d8be37894ade3e68d268c33b7b8077eddd887f0e41cac9d4874cd94492dbc323f1aa96c856f"
+        , VerifyBLS12G1.negative1 =
+            BI.toBuiltin $ bytesFromHex "ac18eaa3c86ab258d1a24375c2189c69051a7a1aa517ba144d59840db1d38d6981a886479af77292a3b0af18a44dbf5d"
+        , VerifyBLS12G1.negative2 =
+            BI.toBuiltin $ bytesFromHex "a825e51257bd8c9ff8dc605ea0c35fc00802a1b77bdcb815e720ebe8e439c2ddede9e12fd109f713f3d7b471fda5f900"
+        }
+
+-- test =
+--     let point = bls12_381_G1_compress $ (VerifyBLS12G1.point1 blsG1Datum) `bls12_381_G1_hashToGroup` (VerifyBLS12G1.point2 blsG1Datum)
+--     in point
+
+-- prettyPrint :: ByteString -> String
+-- prettyPrint = concat . map (flip showHex "") . BS.unpack
