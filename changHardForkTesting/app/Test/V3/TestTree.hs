@@ -41,7 +41,8 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
 
     -- checkTxInfo tests must be first to run after new testnet is initialised due to expected slot to posix time
     sequence_
-        [ run verifyBLS12G1ForUtxoUnlockingTestInfo
+        [ run verifyBLS12G2ForUtxoUnlockingTestInfo
+        , run verifyBLS12G1ForUtxoUnlockingTestInfo
         , run verifySchnorrSignatureForUtxoUnlockingTestInfo
         , run verifyKeccak256ForUtxoUnlockingTestInfo
         ]
