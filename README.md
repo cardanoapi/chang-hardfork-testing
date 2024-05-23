@@ -9,8 +9,22 @@
 - Verify the final state to confirm that everything executed correctly.
 
 ## Current Tests
-- Test the `verifySchnorrSecp256k1Signature` function.
-- Test the `keccak_256` function.
+- `verifySchnorrSecp256k1Signature` 
+- `keccak_256`
+- `bls12_381_g1`
+  - `bls12_381_g1_compress` 
+  - `bls12_381_g1_uncompress`
+  - `bls12_381_g1_scalarMul`
+  - `bls12_381_g1_add`
+  - `bls12_381_g1_neg`
+  - `bls12_381_g1_equals`
+- `bls12_381_g2`
+  - `bls12_381_g2_compress` 
+  - `bls12_381_g2_uncompress`
+  - `bls12_381_g2_scalarMul`
+  - `bls12_381_g2_add`
+  - `bls12_381_g2_neg`
+  - `bls12_381_g2_equals`
 
 ## Steps to run
 1. `nix develop`
