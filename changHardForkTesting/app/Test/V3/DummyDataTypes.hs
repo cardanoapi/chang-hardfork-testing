@@ -14,6 +14,8 @@ import PlutusTx.Builtins
 import PlutusTx.Builtins.Class qualified as BI
 import V3.Spend.VerifyBLS12G1 qualified as VerifyBLS12G1
 import V3.Spend.VerifyBLS12G2 qualified as VerifyBLS12G2
+import V3.Spend.VerifyEcdsa qualified as VerifyEcdsa
+import V3.Spend.VerifyEd25519 qualified as VerifyEd25519
 import V3.Spend.VerifyKeccak qualified as VerifyKeccak
 import V3.Spend.VerifySchnorr qualified as VerifySchnorr
 
@@ -107,9 +109,65 @@ blsG2Redeemer =
                         <> "81de8d393c5b5a7ce82ad0d050bfab1d9b1006043c79c08ed99b131ba7bbe84e960ec4ab0bf4b919ebeebc0a07a9821"
         }
 
+v3VerifyEcdsaDatum :: VerifyEcdsa.EcdsaComponents
+v3VerifyEcdsaDatum =
+    VerifyEcdsa.EcdsaComponents
+        { VerifyEcdsa.vk =
+            BI.toBuiltin $
+                bytesFromHex "0392d7b94bc6a11c335a043ee1ff326b6eacee6230d3685861cd62bce350a172e0"
+        , VerifyEcdsa.msg =
+            BI.toBuiltin $
+                bytesFromHex "16e0bf1f85594a11e75030981c0b670370b3ad83a43f49ae58a2fd6f6513cde9"
+        , VerifyEcdsa.sig =
+            BI.toBuiltin $
+                bytesFromHex "5fb12954b28be6456feb080cfb8467b6f5677f62eb9ad231de7a575f4b6857512754fb5ef7e0e60e270832e7bb0e2f0dc271012fa9c46c02504aa0e798be6295"
+        }
+
+v3VerifyEcdsaRedeemer :: VerifyEcdsa.EcdsaComponents
+v3VerifyEcdsaRedeemer =
+    VerifyEcdsa.EcdsaComponents
+        { VerifyEcdsa.vk =
+            BI.toBuiltin $
+                bytesFromHex "0392d7b94bc6a11c335a043ee1ff326b6eacee6230d3685861cd62bce350a172e0"
+        , VerifyEcdsa.msg =
+            BI.toBuiltin $
+                bytesFromHex "16e0bf1f85594a11e75030981c0b670370b3ad83a43f49ae58a2fd6f6513cde9"
+        , VerifyEcdsa.sig =
+            BI.toBuiltin $
+                bytesFromHex "5fb12954b28be6456feb080cfb8467b6f5677f62eb9ad231de7a575f4b6857512754fb5ef7e0e60e270832e7bb0e2f0dc271012fa9c46c02504aa0e798be6295"
+        }
+
+v3VerifyEd25519Datum :: VerifyEd25519.Ed25519Components
+v3VerifyEd25519Datum =
+    VerifyEd25519.Ed25519Components
+        { VerifyEd25519.vk =
+            BI.toBuiltin $
+                bytesFromHex "98a5e3a36e67aaba89888bf093de1ad963e774013b3902bfab356d8b90178a63"
+        , VerifyEd25519.msg =
+            BI.toBuiltin $
+                bytesFromHex "b4a8f381e70e7a"
+        , VerifyEd25519.sig =
+            BI.toBuiltin $
+                bytesFromHex "6e0af2fe55ae377a6b7a7278edfb419bd321e06d0df5e27037db8812e7e3529810fa5552f6c0020985ca17a0e02e036d7b222a24f99b77b75fdd16cb05568107"
+        }
+
+v3VerifyEd25519Redeemer :: VerifyEd25519.Ed25519Components
+v3VerifyEd25519Redeemer =
+    VerifyEd25519.Ed25519Components
+        { VerifyEd25519.vk =
+            BI.toBuiltin $
+                bytesFromHex "e253af0766804b869bb1595be9765b534886bbaab8305bf50dbc7f899bfb5f0101"
+        , VerifyEd25519.msg =
+            BI.toBuiltin $
+                bytesFromHex "18b6bec097"
+        , VerifyEd25519.sig =
+            BI.toBuiltin $
+                bytesFromHex "b2fc46ad47af464478c199e1f8be169f1be6327c7f9a0a6689371ca94caf04064a01b22aff1520abd58951341603faed768cf78ce97ae7b038abfe456aa17c09"
+        }
+
 -- test =
---     let point = bls12_381_G2_compress $ (bls12_381_G2_uncompress $ VerifyBLS12G2.point1 blsG2Datum) `bls12_381_G2_add` (bls12_381_G2_uncompress $ VerifyBLS12G2.point2 blsG2Datum)
---     in BI.fromBuiltin $ point
+--     let point = (bls12_381_G1_uncompress $ VerifyBLS12G1.point1 blsG1Datum) `bls12_381_millerLoop` (bls12_381_G2_uncompress $ VerifyBLS12G2.point2 blsG2Datum)
+--     in show point
 
 -- prettyPrint :: ByteString -> String
 -- prettyPrint = concat . map (flip showHex "") . BS.unpack

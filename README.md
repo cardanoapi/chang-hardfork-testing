@@ -1,6 +1,6 @@
 ### Chang HardFork Testing
 
-#### The testnet cluster setup, nix configurations and Helper functions were imported from [Antaeus](https://github.com/IntersectMBO/antaeus/)
+#### The testnet setup, nix configurations and Helper functions were imported from [Antaeus](https://github.com/IntersectMBO/antaeus/)
 
 ## Strategy
 - Integrate Plutus functions into basic validator scripts.

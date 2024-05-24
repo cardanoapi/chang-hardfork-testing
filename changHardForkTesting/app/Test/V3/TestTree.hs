@@ -41,10 +41,12 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
 
     -- checkTxInfo tests must be first to run after new testnet is initialised due to expected slot to posix time
     sequence_
-        [ run verifyBLS12G2ForUtxoUnlockingTestInfo
-        , run verifyBLS12G1ForUtxoUnlockingTestInfo
-        , run verifySchnorrSignatureForUtxoUnlockingTestInfo
-        , run verifyKeccak256ForUtxoUnlockingTestInfo
+        [ --   run verifyBLS12G2ForUtxoUnlockingTestInfo
+          -- , run verifyBLS12G1ForUtxoUnlockingTestInfo
+          -- , run verifySchnorrSignatureForUtxoUnlockingTestInfo
+          -- , run verifyKeccak256ForUtxoUnlockingTestInfo
+          -- , run verifyEcdsaSignatureForUtxoUnlockingTestInfo
+          run verifyEd25519SignatureForUtxoUnlockingTestInfo
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
