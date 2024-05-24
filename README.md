@@ -9,6 +9,8 @@
 - Verify the final state to confirm that everything executed correctly.
 
 ## Current Tests
+- `verifyEcdsaSecp256k1Signature`
+- `verifyEd25519Signature`
 - `verifySchnorrSecp256k1Signature` 
 - `keccak_256`
 - `bls12_381_g1`
