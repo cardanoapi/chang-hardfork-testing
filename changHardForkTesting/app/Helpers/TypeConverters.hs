@@ -10,15 +10,18 @@ import Cardano.Chain.Common (addrToBase58)
 import Cardano.Ledger.Conway.Governance qualified as L
 import Cardano.Ledger.Crypto qualified as L
 import Cardano.Ledger.Shelley.API qualified as L
+import Data.String (fromString)
 import PlutusLedgerApi.V1 qualified as PV1
 import PlutusLedgerApi.V1.Address (Address (Address))
 import PlutusLedgerApi.V1.Credential (
     Credential (PubKeyCredential, ScriptCredential),
     StakingCredential (StakingHash),
  )
+import PlutusLedgerApi.V1.Value (AssetClass, assetClassValue)
 import PlutusLedgerApi.V1.Value qualified as Value
 import PlutusLedgerApi.V2 qualified as PV2
 import PlutusLedgerApi.V3 qualified as PV3
+import PlutusTx.Builtins qualified as BI
 import PlutusTx.Prelude qualified as PlutusTx
 
 fromCardanoPaymentKeyHash :: C.Hash C.PaymentKey -> PV1.PubKeyHash
@@ -217,6 +220,13 @@ fromCardanoProposal sbe (C.Proposal ledgerPP) =
 
     fromLedgerGovernanceAction :: L.GovAction era -> PV3.GovernanceAction
     fromLedgerGovernanceAction = undefined -- TODO once ledger implements PlutusV3 TxInfo
+
+toPlutusValue :: C.Value -> PV3.Value
+toPlutusValue val1 = mconcat $ Prelude.map (\(asset, C.Quantity amount) -> assetClassValue (toPlutusAssetClass asset) amount) (C.valueToList val1)
+
+toPlutusAssetClass :: C.AssetId -> AssetClass
+toPlutusAssetClass (C.AssetId (C.PolicyId hash) (C.AssetName name)) = Value.AssetClass (PV3.CurrencySymbol $ BI.toBuiltin $ C.serialiseToRawBytes hash, PV3.TokenName $ BI.toBuiltin name)
+toPlutusAssetClass C.AdaAssetId = Value.AssetClass (PV3.CurrencySymbol $ fromString "", PV3.TokenName $ fromString "")
 
 -- fromLedgerStakingCredential :: C.StakeCredential -> PV3.Credential
 -- fromLedgerStakingCredential (C.StakeCredentialByKey kh) = PV3.PubKeyCredential (fromCardanoStakeKeyHash kh)

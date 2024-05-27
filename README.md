@@ -9,6 +9,7 @@
 - Verify the final state to confirm that everything executed correctly.
 
 ## Current Tests
+### Crypto 
 - `verifyEcdsaSecp256k1Signature`
 - `verifyEd25519Signature`
 - `verifySchnorrSecp256k1Signature` 
@@ -28,6 +29,9 @@
   - `bls12_381_g2_add`
   - `bls12_381_g2_neg`
   - `bls12_381_g2_equals`
+
+### Reference Inputs 
+- verify reference input address, value and datum visibility using V3 script context
 
 ## Steps to run
 1. `nix develop`
