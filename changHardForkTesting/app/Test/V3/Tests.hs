@@ -24,6 +24,7 @@ import Test.V3.DummyDataTypes
 import Utils
 import V3.Spend.VerifyBLS12G1 qualified as V3.Spend.VerifyBLS12G1
 import V3.Spend.VerifyBLS12G2 qualified as V3.Spend.VerifyBLS12G2
+import V3.Spend.VerifyBlake2b224 qualified as V3.Spend.VerifyBlake2b224
 import V3.Spend.VerifyEcdsa qualified as V3.Spend.VerifyEcdsa
 import V3.Spend.VerifyEd25519 qualified as V3.Spend.VerifyEd25519
 import V3.Spend.VerifyKeccak qualified as V3.Spend.VerifyKeccak
@@ -439,6 +440,75 @@ verifyBLS12G2ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
                     (Left $ PlutusScriptSerialised (sbs verifyBLSInfo))
                     C.InlineScriptDatum
                     (dataToHashableScriptData blsG2Redeemer)
+        collateral = Tx.txInsCollateral era [txIn]
+        redeemFromScript =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.scriptTxIn [scriptTxIn] scriptWitness
+                , C.txInsCollateral = collateral
+                , C.txOuts = [redeemTxOut]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
+    resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
+    txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 3_000_000)
+    Helpers.Test.assert "Funds Unlocked" txOutHasValue
+
+verifyBlake2b224ForValidatingPubKeyHashTestInfo :: TestInfo era
+verifyBlake2b224ForValidatingPubKeyHashTestInfo =
+    TestInfo
+        { testName = "verifyBlake2b224ForValidatingPubKeyHashTest"
+        , testDescription =
+            "Verify blake2b_224 function for validating pubKeyHash."
+        , test = verifyBlake2b224ForValidatingPubKeyHashTest
+        }
+
+verifyBlake2b224ForValidatingPubKeyHashTest ::
+    (MonadIO m, MonadTest m) =>
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyBlake2b224ForValidatingPubKeyHashTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+    era <- TN.eraFromOptionsM networkOptions
+    pv <- TN.pvFromOptions networkOptions
+    skeyAndAddress <- TN.w tempAbsPath networkId
+    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let sbe = toShelleyBasedEra era
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+    let
+        verifyBlake2b224Info = v3ScriptInfo networkId (V3.Spend.VerifyBlake2b224.validator)
+        collateral = Tx.txInsCollateral era [txIn]
+        scriptTxOut =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 4_000_000)
+                (address verifyBlake2b224Info)
+                (dataToHashableScriptData v3VerifyBlake2b224Datum)
+        fundScriptAddress =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.pubkeyTxIns [txIn]
+                , C.txInsCollateral = collateral
+                , C.txOuts = [scriptTxOut]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
+    resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyBlake2b224Info) scriptTxIn "TN.getTxOutAtAddress"
+    txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
+    Helpers.Test.assert "Script has been funded" txOutHasValue
+    -- redeeming from script
+    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
+    let
+        redeemTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w2Address
+        scriptWitness =
+            C.ScriptWitness C.ScriptWitnessForSpending $
+                spendScriptWitness
+                    sbe
+                    (C.PlutusScriptLanguage C.PlutusScriptV3)
+                    (Left $ PlutusScriptSerialised (sbs verifyBlake2b224Info))
+                    C.InlineScriptDatum
+                    (dataToHashableScriptData v3VerifyBlake2b224Redeemer)
         collateral = Tx.txInsCollateral era [txIn]
         redeemFromScript =
             (Tx.emptyTxBodyContent sbe pparams)

@@ -13,6 +13,7 @@
 - `verifyEd25519Signature`
 - `verifySchnorrSecp256k1Signature` 
 - `keccak_256`
+- `blake2b_224`
 - `bls12_381_g1`
   - `bls12_381_g1_compress` 
   - `bls12_381_g1_uncompress`

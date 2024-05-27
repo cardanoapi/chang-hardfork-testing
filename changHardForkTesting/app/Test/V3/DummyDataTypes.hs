@@ -2,14 +2,8 @@
 
 module Test.V3.DummyDataTypes where
 
-import Cardano.Crypto.EllipticCurve.BLS12_381 qualified as BLSBindings
-import Data.ByteString (ByteString)
-import Data.ByteString qualified as BS
-import Data.ByteString.Builder (toLazyByteString)
-import Data.ByteString.Char8 qualified as BS8
 import Helpers.PlutusScripts (bytesFromHex)
-import Numeric (showHex)
-import PlutusLedgerApi.V3 (PubKeyHash (..), toBuiltin)
+import PlutusLedgerApi.V3 (PubKeyHash (..))
 import PlutusTx.Builtins
 import PlutusTx.Builtins.Class qualified as BI
 import V3.Spend.VerifyBLS12G1 qualified as VerifyBLS12G1
@@ -164,6 +158,12 @@ v3VerifyEd25519Redeemer =
             BI.toBuiltin $
                 bytesFromHex "b2fc46ad47af464478c199e1f8be169f1be6327c7f9a0a6689371ca94caf04064a01b22aff1520abd58951341603faed768cf78ce97ae7b038abfe456aa17c09"
         }
+
+v3VerifyBlake2b224Datum :: BuiltinByteString
+v3VerifyBlake2b224Datum = BI.toBuiltin $ bytesFromHex "5d4f58f5d89db08086d4cb0d933e2eccb38c0148586f0758b88b486f"
+
+v3VerifyBlake2b224Redeemer :: BuiltinByteString
+v3VerifyBlake2b224Redeemer = BI.toBuiltin $ bytesFromHex "e9328f3aefec871e517803de2efaab12c792a9efb1f0f497a4996504b9f33c69"
 
 -- test =
 --     let point = (bls12_381_G1_uncompress $ VerifyBLS12G1.point1 blsG1Datum) `bls12_381_millerLoop` (bls12_381_G2_uncompress $ VerifyBLS12G2.point2 blsG2Datum)
