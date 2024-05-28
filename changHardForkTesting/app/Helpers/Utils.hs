@@ -8,12 +8,14 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor (void)
 import Data.List (intersperse)
 import Data.Time.Clock.POSIX qualified as Time
+import Debug.Trace qualified as Debug
 import GHC.Stack qualified as GHC
 import Hedgehog (MonadTest)
 import Hedgehog qualified as H
 import Hedgehog.Extras qualified as H
 import Hedgehog.Extras qualified as HE
 import Hedgehog.Extras.Stock.CallStack qualified as H
+import Helpers.PlutusScripts (mintScriptWitness', plutusL3, toScriptData)
 import System.Directory qualified as IO
 import System.Environment qualified as IO
 import System.IO qualified as IO

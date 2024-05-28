@@ -33,6 +33,9 @@
 ### Reference Inputs 
 - verify reference input address, value and datum visibility using V3 script context
 
+### Minting
+- minting a NFT with exactly max execution units
+
 ## Steps to run
 1. `nix develop`
 2. `cabal run changHardForkTesting\`

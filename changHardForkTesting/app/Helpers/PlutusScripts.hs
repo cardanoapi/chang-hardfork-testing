@@ -10,6 +10,7 @@ import Cardano.Api qualified as C
 import Cardano.Api.Shelley qualified as C
 import Control.Monad (void)
 import Data.ByteString qualified as BS (ByteString)
+import Debug.Trace qualified as Debug
 import PlutusLedgerApi.Common (SerialisedScript)
 import PlutusLedgerApi.V1 qualified as PlutusV1
 import PlutusLedgerApi.V1.Bytes qualified as P (bytes, fromHex)
@@ -110,45 +111,50 @@ mintScriptWitness' ::
     C.ExecutionUnits ->
     C.ScriptWitness C.WitCtxMint era
 -- V1 script
-mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV1) (Left script) redeemer = do
+mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV1) (Left script) redeemer exUnits = do
     C.PlutusScriptWitness
         (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
         C.PlutusScriptV1
         (C.PScript script)
         C.NoScriptDatumForMint
         redeemer
+        exUnits
 -- V2 script
-mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Left script) redeemer = do
+mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Left script) redeemer exUnits = do
     C.PlutusScriptWitness
         (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
         C.PlutusScriptV2
         (C.PScript script)
         C.NoScriptDatumForMint
         redeemer
+        exUnits
 -- V2 reference script
-mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Right refTxIn) redeemer = do
+mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV2) (Right refTxIn) redeemer exUnits = do
     C.PlutusScriptWitness
         (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
         C.PlutusScriptV2
         (C.PReferenceScript refTxIn Nothing)
         C.NoScriptDatumForMint
         redeemer
+        exUnits
 -- V3 script
-mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Left script) redeemer = do
+mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Left script) redeemer exUnits = do
     C.PlutusScriptWitness
         (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
         C.PlutusScriptV3
         (C.PScript script)
         C.NoScriptDatumForMint
         redeemer
+        exUnits
 -- V3 reference script
-mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Right refTxIn) redeemer = do
+mintScriptWitness' era lang@(C.PlutusScriptLanguage C.PlutusScriptV3) (Right refTxIn) redeemer exUnits = do
     C.PlutusScriptWitness
         (maybeScriptWitness era lang $ C.scriptLanguageSupportedInEra era lang)
         C.PlutusScriptV3
         (C.PReferenceScript refTxIn Nothing)
         C.NoScriptDatumForMint
         redeemer
+        exUnits
 
 spendScriptWitness ::
     C.ShelleyBasedEra era ->

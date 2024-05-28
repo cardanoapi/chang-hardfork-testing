@@ -36,8 +36,8 @@ fromCardanoScriptData = PV1.dataToBuiltinData . C.toPlutusData . C.getScriptData
 fromCardanoScriptHash :: C.ScriptHash -> PV1.ScriptHash
 fromCardanoScriptHash scriptHash = PV1.ScriptHash $ PlutusTx.toBuiltin $ C.serialiseToRawBytes scriptHash
 
-fromCardanoTxIn :: C.TxIn -> PV1.TxOutRef
-fromCardanoTxIn (C.TxIn txId (C.TxIx txIx)) = PV1.TxOutRef (fromCardanoTxId txId) (toInteger txIx)
+fromCardanoTxIn :: C.TxIn -> PV3.TxOutRef
+fromCardanoTxIn (C.TxIn txId (C.TxIx txIx)) = PV3.TxOutRef (fromCardanoTxId txId) (toInteger txIx)
 
 cardanoAddressCredential :: C.AddressInEra era -> Credential
 cardanoAddressCredential (C.AddressInEra C.ByronAddressInAnyEra (C.ByronAddress address)) =

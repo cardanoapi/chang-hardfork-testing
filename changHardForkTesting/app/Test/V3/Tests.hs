@@ -1,6 +1,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Test.V3.Tests where
@@ -9,16 +10,18 @@ import Cardano.Api qualified as C
 import Cardano.Api.Shelley
 import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO)
+import Data.Map qualified as Map
+import Debug.Trace qualified as Debug
 import Hedgehog hiding (test)
 import Hedgehog.Gen hiding (map)
 import Helpers.Common (makeAddressWithStake, toShelleyBasedEra)
-import Helpers.PlutusScripts (spendScriptWitness)
+import Helpers.PlutusScripts (mintScriptWitness, mintScriptWitness', plutusL3, spendScriptWitness)
 import Helpers.Query qualified as Q
 import Helpers.Test (assert)
 import Helpers.TestData (TestInfo (..), TestParams (..))
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
-import Helpers.TypeConverters (toPlutusAddress, toPlutusValue)
+import Helpers.TypeConverters (fromCardanoTxIn, toPlutusAddress, toPlutusValue)
 import PlutusLedgerApi.Common (serialiseCompiledCode)
 import PlutusTx.Code qualified as PlutusTx
 import Test.V3.DummyDataTypes
@@ -29,6 +32,7 @@ import V3.Spend.VerifyBlake2b224 qualified as V3.Spend.VerifyBlake2b224
 import V3.Spend.VerifyEcdsa qualified as V3.Spend.VerifyEcdsa
 import V3.Spend.VerifyEd25519 qualified as V3.Spend.VerifyEd25519
 import V3.Spend.VerifyKeccak qualified as V3.Spend.VerifyKeccak
+import V3.Spend.VerifyMintingMaxExUnits qualified as V3.Spend.VerifyMintingMaxExUnits
 import V3.Spend.VerifyRefInputVisibility qualified as V3.Spend.VerifyRefInputVisibility
 import V3.Spend.VerifySchnorr qualified as V3.Spend.VerifySchnorr
 
@@ -624,3 +628,72 @@ verifyReferenceInputVisibilityTest networkOptions TestParams{localNodeConnectInf
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w1Address redeemedTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 3_000_000)
     Helpers.Test.assert "Funds Unlocked" txOutHasValue
+
+verifyMaxExUnitsMintingTestInfo :: TestInfo era
+verifyMaxExUnitsMintingTestInfo =
+    TestInfo
+        { testName = "verifyMaxExUnitsMintingTest"
+        , testDescription =
+            "Verify minting can be done with exactly max execution units."
+        , test = verifyMaxExUnitsMintingTest
+        }
+
+verifyMaxExUnitsMintingTest ::
+    (MonadIO m, MonadTest m) =>
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+    era <- TN.eraFromOptionsM networkOptions
+    pv <- TN.pvFromOptions networkOptions
+    skeyAndAddress <- TN.w tempAbsPath networkId
+    let (w1SKey, w1Address) = skeyAndAddress !! 0
+        sbe = toShelleyBasedEra era
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+    txInAsTxOut@(C.TxOut _ txInValue _ _) <-
+        Q.getTxOutAtAddress era localNodeConnectInfo w1Address txIn "txInAsTxOut <- getTxOutAtAddress"
+    let scriptValidator = V3.Spend.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
+        verifyMaxExUnitsMintingInfo = v3ScriptInfo networkId scriptValidator
+        policyId = C.PolicyId $ hash verifyMaxExUnitsMintingInfo
+        assetId = C.AssetId policyId "MaxExUnitsMint"
+        tokenValues = C.valueFromList [(assetId, 1)]
+        collateral = Tx.txInsCollateral era [txIn]
+        totalLovelace = C.txOutValueToLovelace txInValue
+        amountPaid = 4_000_000
+        fee = 2_500_000 :: C.Lovelace
+        amountReturned = totalLovelace - amountPaid - fee
+        maxExecutionUnits =
+            C.ExecutionUnits
+                { C.executionSteps = 10_000_000_000
+                , C.executionMemory = 14_000_000
+                }
+        txOut = Tx.txOut era (C.lovelaceToValue 4_000_000 <> tokenValues) w1Address
+        txOutChange = Tx.txOut era (C.lovelaceToValue amountReturned) w1Address
+        mintWitness =
+            Map.fromList
+                [
+                    ( policyId
+                    , mintScriptWitness'
+                        sbe
+                        plutusL3
+                        (Left $ PlutusScriptSerialised (sbs verifyMaxExUnitsMintingInfo))
+                        (dataToHashableScriptData ())
+                        maxExecutionUnits
+                    )
+                ]
+        txBodyConntent =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.pubkeyTxIns [txIn]
+                , C.txInsCollateral = collateral
+                , C.txMintValue = Tx.txMintValue era tokenValues mintWitness
+                , C.txFee = Tx.txFee era fee
+                , C.txOuts = [txOut, txOutChange]
+                }
+    builtTx <- Tx.buildRawTx sbe txBodyConntent
+    rawTx <- Tx.signTx sbe builtTx (C.WitnessPaymentKey w1SKey)
+    let signedTx = C.makeSignedTransaction [rawTx] builtTx
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let mintedTxIn = Tx.txIn (Tx.txId signedTx) 0
+    resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w1Address mintedTxIn "TN.getTxOutAtAddress"
+    txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000 <> tokenValues)
+    Helpers.Test.assert "Tokens Minted" txOutHasValue
