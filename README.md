@@ -39,6 +39,7 @@
 ### Spending 
 - Locking and spending multiple UTxOs in/from the same script address in the same transaction
 - Locking and spending multiple UTxOs in/from different script address in the same transaction
+- Spending a locked UTxO from a script fulfilling milti-signature requirements
 
 ## Steps to run
 1. `nix develop`
