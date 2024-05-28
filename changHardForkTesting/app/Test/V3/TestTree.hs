@@ -52,6 +52,7 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         , run verifyMaxExUnitsMintingTestInfo
         , run verifyLockingAndSpendingInSameScriptTestInfo
         , run verifyLockingAndSpendingInDifferentScriptTestInfo
+        , run verifyMultiSigRequirementTestInfo
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)

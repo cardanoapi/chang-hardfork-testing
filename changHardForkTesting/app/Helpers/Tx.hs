@@ -325,10 +325,10 @@ buildTx ::
     C.LocalNodeConnectInfo ->
     C.TxBodyContent C.BuildTx era ->
     C.Address C.ShelleyAddr ->
-    C.SigningKey C.PaymentKey ->
+    [C.SigningKey C.PaymentKey] ->
     m (C.Tx era)
 buildTx era localNodeConnectInfo txBody changeAddress sKey =
-    buildTxWithAnyWitness era localNodeConnectInfo txBody changeAddress [C.WitnessPaymentKey sKey]
+    buildTxWithAnyWitness era localNodeConnectInfo txBody changeAddress (map C.WitnessPaymentKey sKey)
 
 buildTxWithAnyWitness ::
     (MonadIO m) =>

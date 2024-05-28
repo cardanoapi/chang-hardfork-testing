@@ -92,6 +92,7 @@ executable changHardForkTesting
     V3.Spend.VerifyEcdsa
     V3.Spend.VerifyEd25519
     V3.Spend.VerifyKeccak
+    V3.Spend.VerifyMultiSig
     V3.Spend.VerifyRefInputVisibility
     V3.Spend.VerifySchnorr
 

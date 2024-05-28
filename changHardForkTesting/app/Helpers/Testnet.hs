@@ -326,6 +326,12 @@ wAll tempAbsPath networkId = do
         w1SKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo1/utxo.skey"
         w2VKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo2/utxo.vkey"
         w2SKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo2/utxo.skey"
+        w3VKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo3/utxo.vkey"
+        w3SKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo3/utxo.skey"
+        w4VKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo4/utxo.vkey"
+        w4SKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo4/utxo.skey"
+        w5VKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo5/utxo.vkey"
+        w5SKeyFile = C.File $ tempAbsPath </> "utxo-keys/utxo5/utxo.skey"
     -- GenesisUTxOKey comes from cardano-testnet
     let genesisVKey vkeyFile = maybeReadAs (C.AsVerificationKey C.AsGenesisUTxOKey) vkeyFile
         genesisSKey skeyFile = maybeReadAs (C.AsSigningKey C.AsGenesisUTxOKey) skeyFile
@@ -339,24 +345,44 @@ wAll tempAbsPath networkId = do
     mGenesisSKey2 :: Maybe (C.SigningKey C.GenesisUTxOKey) <- genesisSKey w2SKeyFile
     mPaymentVKey2 :: Maybe (C.VerificationKey C.PaymentKey) <- paymentVkey w2VKeyFile
     mPaymentSKey2 :: Maybe (C.SigningKey C.PaymentKey) <- paymentSkey w2SKeyFile
+    mGenesisVKey3 :: Maybe (C.VerificationKey C.GenesisUTxOKey) <- genesisVKey w3VKeyFile
+    mGenesisSKey3 :: Maybe (C.SigningKey C.GenesisUTxOKey) <- genesisSKey w3SKeyFile
+    mPaymentVKey3 :: Maybe (C.VerificationKey C.PaymentKey) <- paymentVkey w3VKeyFile
+    mPaymentSKey3 :: Maybe (C.SigningKey C.PaymentKey) <- paymentSkey w3SKeyFile
+    mGenesisVKey4 :: Maybe (C.VerificationKey C.GenesisUTxOKey) <- genesisVKey w4VKeyFile
+    mGenesisSKey4 :: Maybe (C.SigningKey C.GenesisUTxOKey) <- genesisSKey w4SKeyFile
+    mPaymentVKey4 :: Maybe (C.VerificationKey C.PaymentKey) <- paymentVkey w4VKeyFile
+    mPaymentSKey4 :: Maybe (C.SigningKey C.PaymentKey) <- paymentSkey w4SKeyFile
+    mGenesisVKey5 :: Maybe (C.VerificationKey C.GenesisUTxOKey) <- genesisVKey w5VKeyFile
+    mGenesisSKey5 :: Maybe (C.SigningKey C.GenesisUTxOKey) <- genesisSKey w5SKeyFile
+    mPaymentVKey5 :: Maybe (C.VerificationKey C.PaymentKey) <- paymentVkey w5VKeyFile
+    mPaymentSKey5 :: Maybe (C.SigningKey C.PaymentKey) <- paymentSkey w5SKeyFile
     let
         vKey1 :: C.VerificationKey C.PaymentKey = maybe (fromJust mPaymentVKey1) C.castVerificationKey mGenesisVKey1
         sKey1 :: C.SigningKey C.PaymentKey = maybe (fromJust mPaymentSKey1) C.castSigningKey mGenesisSKey1
         vKey2 :: C.VerificationKey C.PaymentKey = maybe (fromJust mPaymentVKey2) C.castVerificationKey mGenesisVKey2
         sKey2 :: C.SigningKey C.PaymentKey = maybe (fromJust mPaymentSKey2) C.castSigningKey mGenesisSKey2
-
+        vKey3 :: C.VerificationKey C.PaymentKey = maybe (fromJust mPaymentVKey3) C.castVerificationKey mGenesisVKey3
+        sKey3 :: C.SigningKey C.PaymentKey = maybe (fromJust mPaymentSKey3) C.castSigningKey mGenesisSKey3
+        vKey4 :: C.VerificationKey C.PaymentKey = maybe (fromJust mPaymentVKey4) C.castVerificationKey mGenesisVKey4
+        sKey4 :: C.SigningKey C.PaymentKey = maybe (fromJust mPaymentSKey4) C.castSigningKey mGenesisSKey4
+        vKey5 :: C.VerificationKey C.PaymentKey = maybe (fromJust mPaymentVKey5) C.castVerificationKey mGenesisVKey5
+        sKey5 :: C.SigningKey C.PaymentKey = maybe (fromJust mPaymentSKey5) C.castSigningKey mGenesisSKey5
         address1 = makeAddress (Left vKey1) networkId
         address2 = makeAddress (Left vKey2) networkId
-    return [(sKey1, vKey1, address1), (sKey2, vKey2, address2)]
+        address3 = makeAddress (Left vKey3) networkId
+        address4 = makeAddress (Left vKey4) networkId
+        address5 = makeAddress (Left vKey5) networkId
+    return [(sKey1, vKey1, address1), (sKey2, vKey2, address2), (sKey3, vKey3, address3), (sKey4, vKey4, address4), (sKey5, vKey5, address5)]
 
 w ::
     (MonadIO m, MonadTest m) =>
     FilePath ->
     C.NetworkId ->
-    m [(C.SigningKey C.PaymentKey, C.Address C.ShelleyAddr)]
+    m [(C.SigningKey C.PaymentKey, C.VerificationKey C.PaymentKey, C.Address C.ShelleyAddr)]
 w tempAbsPath networkId = do
     resultList <- wAll tempAbsPath networkId
-    let transformedList = map (\(sKey, _, address) -> (sKey, address)) resultList
+    let transformedList = map (\(sKey, vkey, address) -> (sKey, vkey, address)) resultList
     return transformedList
 
 data TestnetStakePool = TestnetStakePool

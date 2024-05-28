@@ -11,6 +11,7 @@ import Cardano.Api.Shelley
 import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO)
 import Data.Map qualified as Map
+import Data.Maybe (fromJust)
 import Debug.Trace qualified as Debug
 import Hedgehog hiding (test)
 import Hedgehog.Gen hiding (map)
@@ -34,6 +35,7 @@ import V3.Spend.VerifyBlake2b224 qualified as V3.Spend.VerifyBlake2b224
 import V3.Spend.VerifyEcdsa qualified as V3.Spend.VerifyEcdsa
 import V3.Spend.VerifyEd25519 qualified as V3.Spend.VerifyEd25519
 import V3.Spend.VerifyKeccak qualified as V3.Spend.VerifyKeccak
+import V3.Spend.VerifyMultiSig qualified as V3.Spend.VerifyMultiSig
 import V3.Spend.VerifyRefInputVisibility qualified as V3.Spend.VerifyRefInputVisibility
 import V3.Spend.VerifySchnorr qualified as V3.Spend.VerifySchnorr
 
@@ -64,7 +66,7 @@ verifyEcdsaSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeConn
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -82,14 +84,14 @@ verifyEcdsaSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeConn
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scripTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyEcdsaInfo) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w2Address
@@ -108,7 +110,7 @@ verifyEcdsaSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeConn
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -133,7 +135,7 @@ verifyEd25519SignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -151,14 +153,14 @@ verifyEd25519SignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scripTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyEd25519Info) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w2Address
@@ -177,7 +179,7 @@ verifyEd25519SignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -202,7 +204,7 @@ verifySchnorrSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -220,14 +222,14 @@ verifySchnorrSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scripTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifySchnorrInfo) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w2Address
@@ -246,7 +248,7 @@ verifySchnorrSignatureForUtxoUnlockingTest networkOptions TestParams{localNodeCo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -271,7 +273,7 @@ verifyKeccak256ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectIn
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -289,14 +291,14 @@ verifyKeccak256ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectIn
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scriptTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyKeccakInfo) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w2Address
@@ -316,7 +318,7 @@ verifyKeccak256ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectIn
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -341,7 +343,7 @@ verifyBLS12G1ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -359,14 +361,14 @@ verifyBLS12G1ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scriptTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyBLSInfo) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w2Address
@@ -385,7 +387,7 @@ verifyBLS12G1ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -410,7 +412,7 @@ verifyBLS12G2ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -428,14 +430,14 @@ verifyBLS12G2ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scriptTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyBLSInfo) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w2Address
@@ -454,7 +456,7 @@ verifyBLS12G2ForUtxoUnlockingTest networkOptions TestParams{localNodeConnectInfo
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -479,7 +481,7 @@ verifyBlake2b224ForValidatingPubKeyHashTest networkOptions TestParams{localNodeC
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
     let sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let
@@ -497,14 +499,14 @@ verifyBlake2b224ForValidatingPubKeyHashTest networkOptions TestParams{localNodeC
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scriptTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyBlake2b224Info) scriptTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000)
     Helpers.Test.assert "Script has been funded" txOutHasValue
     -- redeeming from script
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let
         redeemTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w2Address
@@ -523,7 +525,7 @@ verifyBlake2b224ForValidatingPubKeyHashTest networkOptions TestParams{localNodeC
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -548,8 +550,8 @@ verifyReferenceInputVisibilityTest networkOptions TestParams{localNodeConnectInf
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
-        (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+        (w2SKey, _, w2Address) = skeyAndAddress !! 1
         sbe = toShelleyBasedEra era
     txIn <- Q.firstTxIn era localNodeConnectInfo w1Address
     let collateral = Tx.txInsCollateral era [txIn]
@@ -566,7 +568,7 @@ verifyReferenceInputVisibilityTest networkOptions TestParams{localNodeConnectInf
                 , C.txInsCollateral = collateral
                 , C.txOuts = [createRefInputUTxO]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundRefInput w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundRefInput w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let refTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address refTxIn "TN.getTxOutAtAddress"
@@ -596,7 +598,7 @@ verifyReferenceInputVisibilityTest networkOptions TestParams{localNodeConnectInf
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scriptTxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address verifyRefInputVisibilityInfo) scriptTxIn "TN.getTxOutAtAddress"
@@ -623,7 +625,7 @@ verifyReferenceInputVisibilityTest networkOptions TestParams{localNodeConnectInf
                 , C.txOuts = [redeemTxOut]
                 , C.txInsReference = referenceInput
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo redeemFromScript w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w1Address redeemedTxIn "TN.getTxOutAtAddress"
@@ -648,7 +650,7 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
     era <- TN.eraFromOptionsM networkOptions
     pv <- TN.pvFromOptions networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
         sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     txInAsTxOut@(C.TxOut _ txInValue _ _) <-
@@ -718,7 +720,7 @@ verifyLockingAndSpendingInSameScriptTest ::
 verifyLockingAndSpendingInSameScriptTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
     era <- TN.eraFromOptionsM networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
         sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let collateral = Tx.txInsCollateral era [txIn]
@@ -748,7 +750,7 @@ verifyLockingAndSpendingInSameScriptTest networkOptions TestParams{localNodeConn
                 , C.txInsCollateral = collateral
                 , C.txOuts = [scriptTxOut1, scriptTxOut2, scriptTxOut3]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let scriptTxIn1 = Tx.txIn (Tx.txId signedTx) 0
         scriptTxIn2 = Tx.txIn (Tx.txId signedTx) 1
@@ -761,7 +763,7 @@ verifyLockingAndSpendingInSameScriptTest networkOptions TestParams{localNodeConn
     txOutHasValue3 <- Q.txOutHasValue resultTxOut3 (C.lovelaceToValue 2_000_000)
     Helpers.Test.assert "Script has been funded" (txOutHasValue1 && txOutHasValue2 && txOutHasValue3)
     -- redeem 2 UtxOs from script and fund 2 UtxOs to sctipt in the same transaction
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let collateral = Tx.txInsCollateral era [txIn]
         scriptWitness =
@@ -794,7 +796,7 @@ verifyLockingAndSpendingInSameScriptTest networkOptions TestParams{localNodeConn
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut1, redeemTxOut2, scriptTxOut4, scriptTxOut5]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn1 = Tx.txIn (Tx.txId signedTx) 0
         redeemedTxIn2 = Tx.txIn (Tx.txId signedTx) 1
@@ -820,6 +822,7 @@ verifyLockingAndSpendingInDifferentScriptTestInfo =
             "Verify locking and spending multiple UTxOs in/from different script address in the same transaction."
         , test = verifyLockingAndSpendingInDifferentScriptTest
         }
+
 verifyLockingAndSpendingInDifferentScriptTest ::
     (MonadIO m, MonadTest m) =>
     TN.TestEnvironmentOptions era ->
@@ -828,7 +831,7 @@ verifyLockingAndSpendingInDifferentScriptTest ::
 verifyLockingAndSpendingInDifferentScriptTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
     era <- TN.eraFromOptionsM networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
-    let (w1SKey, w1Address) = skeyAndAddress !! 0
+    let (w1SKey, _, w1Address) = skeyAndAddress !! 0
         sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let collateral = Tx.txInsCollateral era [txIn]
@@ -854,7 +857,7 @@ verifyLockingAndSpendingInDifferentScriptTest networkOptions TestParams{localNod
                 , C.txInsCollateral = collateral
                 , C.txOuts = [script1TxOut, script2TxOut]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let script1TxIn = Tx.txIn (Tx.txId signedTx) 0
         script2TxIn = Tx.txIn (Tx.txId signedTx) 1
@@ -864,7 +867,7 @@ verifyLockingAndSpendingInDifferentScriptTest networkOptions TestParams{localNod
     scriptTxOut2HasValue <- Q.txOutHasValue scriptTxOut2 (C.lovelaceToValue 5_000_000)
     Helpers.Test.assert "Scripts has been funded" (scriptTxOut1HasValue && scriptTxOut2HasValue)
     -- redeem from both scripts in the same transaction
-    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    let (w2SKey, _, w2Address) = skeyAndAddress !! 1
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
     let collateral = Tx.txInsCollateral era [txIn]
         scriptWitness1 =
@@ -894,7 +897,7 @@ verifyLockingAndSpendingInDifferentScriptTest networkOptions TestParams{localNod
                 , C.txInsCollateral = collateral
                 , C.txOuts = [redeemTxOut1, redeemTxOut2]
                 }
-    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address w2SKey
+    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address [w2SKey]
     Tx.submitTx sbe localNodeConnectInfo signedTx
     let redeemedTxIn1 = Tx.txIn (Tx.txId signedTx) 0
         redeemedTxIn2 = Tx.txIn (Tx.txId signedTx) 1
@@ -903,3 +906,78 @@ verifyLockingAndSpendingInDifferentScriptTest networkOptions TestParams{localNod
     walletTxOutHasValue1 <- Q.txOutHasValue walletTxOut1 (C.lovelaceToValue 4_000_000)
     walletTxOutHasValue2 <- Q.txOutHasValue walletTxOut2 (C.lovelaceToValue 5_000_000)
     Helpers.Test.assert "Funds Unlocked" (walletTxOutHasValue1 && walletTxOutHasValue2)
+
+verifyMultiSigRequirementTestInfo :: TestInfo era
+verifyMultiSigRequirementTestInfo =
+    TestInfo
+        { testName = "verifyMultiSigRequirementTest"
+        , testDescription =
+            "Verify spending UTxOs from script address requiring multiple signatures."
+        , test = verifyMultiSigRequirementTest
+        }
+
+verifyMultiSigRequirementTest ::
+    (MonadIO m, MonadTest m) =>
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMultiSigRequirementTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+    era <- TN.eraFromOptionsM networkOptions
+    skeyAndAddress <- TN.w tempAbsPath networkId
+    let (w1SKey, v1SKey, w1Address) = skeyAndAddress !! 0
+        (w2SKey, v2SKey, w2Address) = skeyAndAddress !! 1
+        (w3SKey, v3SKey, w3Address) = skeyAndAddress !! 2
+        sbe = toShelleyBasedEra era
+    let
+        pubKeyHashes =
+            map
+                fromJust
+                (map C.shelleyPayAddrToPlutusPubKHash [w1Address, w2Address, w3Address])
+        threshold = 2
+        parameter = V3.Spend.VerifyMultiSig.MultiSigParams pubKeyHashes threshold
+        multisigScriptInfo = v3ScriptInfo networkId (V3.Spend.VerifyMultiSig.validator parameter)
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+    let w1Collateral = Tx.txInsCollateral era [txIn]
+        scriptTxOut =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 50_000_000)
+                (address multisigScriptInfo)
+                (dataToHashableScriptData ())
+        fundScriptAddress =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.pubkeyTxIns [txIn]
+                , C.txInsCollateral = w1Collateral
+                , C.txOuts = [scriptTxOut]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address [w1SKey]
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let scriptTxIn = Tx.txIn (Tx.txId signedTx) 0
+    scriptTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo (address multisigScriptInfo) scriptTxIn "TN.getTxOutAtAddress"
+    scriptTxOutHasValue <- Q.txOutHasValue scriptTxOut (C.lovelaceToValue 50_000_000)
+    Helpers.Test.assert "Scripts has been funded" scriptTxOutHasValue
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
+    let w2Collateral = Tx.txInsCollateral era [txIn]
+        signers = Tx.txExtraKeyWits era [v2SKey, v3SKey]
+        scriptWitness =
+            C.ScriptWitness C.ScriptWitnessForSpending $
+                spendScriptWitness
+                    sbe
+                    (C.PlutusScriptLanguage C.PlutusScriptV3)
+                    (Left $ PlutusScriptSerialised (sbs multisigScriptInfo))
+                    C.InlineScriptDatum
+                    (dataToHashableScriptData ())
+        redeemTxOut = Tx.txOut era (C.lovelaceToValue 30_000_000) w3Address
+        txBodyContent =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.scriptTxIn [scriptTxIn] scriptWitness
+                , C.txInsCollateral = w2Collateral
+                , C.txOuts = [redeemTxOut]
+                , C.txExtraKeyWits = signers
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address [w2SKey, w3SKey]
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let redeemedTxIn = Tx.txIn (Tx.txId signedTx) 0
+    w3TxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w3Address redeemedTxIn "TN.getTxOutAtAddress"
+    w3TxOutHasValue <- Q.txOutHasValue w3TxOut (C.lovelaceToValue 30_000_000)
+    Helpers.Test.assert "Funds Unlocked" w3TxOutHasValue
