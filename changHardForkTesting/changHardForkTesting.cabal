@@ -84,13 +84,14 @@ executable changHardForkTesting
     Test.V3.Tests
     Test.V3.TestTree
     Utils
+    V3.Mint.VerifyMintingMaxExUnits
+    V3.Spend.SimpleScript
     V3.Spend.VerifyBlake2b224
     V3.Spend.VerifyBLS12G1
     V3.Spend.VerifyBLS12G2
     V3.Spend.VerifyEcdsa
     V3.Spend.VerifyEd25519
     V3.Spend.VerifyKeccak
-    V3.Spend.VerifyMintingMaxExUnits
     V3.Spend.VerifyRefInputVisibility
     V3.Spend.VerifySchnorr
 

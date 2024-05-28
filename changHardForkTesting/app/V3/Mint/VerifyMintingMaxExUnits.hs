@@ -5,7 +5,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.1.0 #-}
 
-module V3.Spend.VerifyMintingMaxExUnits where
+module V3.Mint.VerifyMintingMaxExUnits where
 
 import PlutusCore.Core (plcVersion110)
 import PlutusLedgerApi.V1.Value (flattenValue)

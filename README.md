@@ -36,6 +36,9 @@
 ### Minting
 - minting a NFT with exactly max execution units
 
+### Spending 
+- Locking and spending multiple UTxOs in/from the same script address in the same transaction
+
 ## Steps to run
 1. `nix develop`
 2. `cabal run changHardForkTesting\`

@@ -26,13 +26,14 @@ import PlutusLedgerApi.Common (serialiseCompiledCode)
 import PlutusTx.Code qualified as PlutusTx
 import Test.V3.DummyDataTypes
 import Utils
+import V3.Mint.VerifyMintingMaxExUnits qualified as V3.Mint.VerifyMintingMaxExUnits
+import V3.Spend.SimpleScript qualified as V3.Spend.SimpleScript
 import V3.Spend.VerifyBLS12G1 qualified as V3.Spend.VerifyBLS12G1
 import V3.Spend.VerifyBLS12G2 qualified as V3.Spend.VerifyBLS12G2
 import V3.Spend.VerifyBlake2b224 qualified as V3.Spend.VerifyBlake2b224
 import V3.Spend.VerifyEcdsa qualified as V3.Spend.VerifyEcdsa
 import V3.Spend.VerifyEd25519 qualified as V3.Spend.VerifyEd25519
 import V3.Spend.VerifyKeccak qualified as V3.Spend.VerifyKeccak
-import V3.Spend.VerifyMintingMaxExUnits qualified as V3.Spend.VerifyMintingMaxExUnits
 import V3.Spend.VerifyRefInputVisibility qualified as V3.Spend.VerifyRefInputVisibility
 import V3.Spend.VerifySchnorr qualified as V3.Spend.VerifySchnorr
 
@@ -652,7 +653,7 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     txInAsTxOut@(C.TxOut _ txInValue _ _) <-
         Q.getTxOutAtAddress era localNodeConnectInfo w1Address txIn "txInAsTxOut <- getTxOutAtAddress"
-    let scriptValidator = V3.Spend.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
+    let scriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
         verifyMaxExUnitsMintingInfo = v3ScriptInfo networkId scriptValidator
         policyId = C.PolicyId $ hash verifyMaxExUnitsMintingInfo
         assetId = C.AssetId policyId "MaxExUnitsMint"
@@ -697,3 +698,114 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w1Address mintedTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000 <> tokenValues)
     Helpers.Test.assert "Tokens Minted" txOutHasValue
+
+-- locking multiple UTxOs in the same script address in the same transaction
+-- spending multiple UTxOs from the same sctipt address in the same transaction
+verifyLockingAndSpendingInSameTxTestInfo :: TestInfo era
+verifyLockingAndSpendingInSameTxTestInfo =
+    TestInfo
+        { testName = "verifyLockingAndSpendingInSameTxTest"
+        , testDescription =
+            "Verify locking and spending multiple UTxOs in/from the same script address in the same transaction."
+        , test = verifyLockingAndSpendingInSameTxTest
+        }
+
+verifyLockingAndSpendingInSameTxTest ::
+    (MonadIO m, MonadTest m) =>
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyLockingAndSpendingInSameTxTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+    era <- TN.eraFromOptionsM networkOptions
+    skeyAndAddress <- TN.w tempAbsPath networkId
+    let (w1SKey, w1Address) = skeyAndAddress !! 0
+        sbe = toShelleyBasedEra era
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+    let collateral = Tx.txInsCollateral era [txIn]
+        datumRedeemer :: Integer = 10046737
+        simpleScriptInfo = v3ScriptInfo networkId (V3.Spend.SimpleScript.validator)
+        scriptTxOut1 =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 4_000_000)
+                (address simpleScriptInfo)
+                (dataToHashableScriptData datumRedeemer)
+        scriptTxOut2 =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 3_000_000)
+                (address simpleScriptInfo)
+                (dataToHashableScriptData datumRedeemer)
+        scriptTxOut3 =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 2_000_000)
+                (address simpleScriptInfo)
+                (dataToHashableScriptData datumRedeemer)
+        fundScriptAddress =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.pubkeyTxIns [txIn]
+                , C.txInsCollateral = collateral
+                , C.txOuts = [scriptTxOut1, scriptTxOut2, scriptTxOut3]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let scriptTxIn1 = Tx.txIn (Tx.txId signedTx) 0
+        scriptTxIn2 = Tx.txIn (Tx.txId signedTx) 1
+        scriptTxIn3 = Tx.txIn (Tx.txId signedTx) 2
+    resultTxOut1 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo) scriptTxIn1 "TN.getTxOutAtAddress"
+    txOutHasValue1 <- Q.txOutHasValue resultTxOut1 (C.lovelaceToValue 4_000_000)
+    resultTxOut2 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo) scriptTxIn2 "TN.getTxOutAtAddress"
+    txOutHasValue2 <- Q.txOutHasValue resultTxOut2 (C.lovelaceToValue 3_000_000)
+    resultTxOut3 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo) scriptTxIn3 "TN.getTxOutAtAddress"
+    txOutHasValue3 <- Q.txOutHasValue resultTxOut3 (C.lovelaceToValue 2_000_000)
+    Helpers.Test.assert "Script has been funded" (txOutHasValue1 && txOutHasValue2 && txOutHasValue3)
+    -- redeem 2 UtxOs from script and fund 2 UtxOs to sctipt in the same transaction
+    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
+    let collateral = Tx.txInsCollateral era [txIn]
+        scriptWitness =
+            C.ScriptWitness C.ScriptWitnessForSpending $
+                spendScriptWitness
+                    sbe
+                    (C.PlutusScriptLanguage C.PlutusScriptV3)
+                    (Left $ PlutusScriptSerialised (sbs simpleScriptInfo))
+                    C.InlineScriptDatum
+                    (dataToHashableScriptData datumRedeemer)
+        redeemTxOut1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w2Address
+        redeemTxOut2 = Tx.txOut era (C.lovelaceToValue 2_000_000) w2Address
+        scriptTxOut4 =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 5_000_000)
+                (address simpleScriptInfo)
+                (dataToHashableScriptData datumRedeemer)
+        scriptTxOut5 =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 6_000_000)
+                (address simpleScriptInfo)
+                (dataToHashableScriptData datumRedeemer)
+        txBodyContent =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns =
+                    (Tx.scriptTxIn [scriptTxIn1, scriptTxIn2] scriptWitness)
+                        ++ (Tx.pubkeyTxIns [txIn])
+                , C.txInsCollateral = collateral
+                , C.txOuts = [redeemTxOut1, redeemTxOut2, scriptTxOut4, scriptTxOut5]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address w2SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let redeemedTxIn1 = Tx.txIn (Tx.txId signedTx) 0
+        redeemedTxIn2 = Tx.txIn (Tx.txId signedTx) 1
+        scriptTxIn4 = Tx.txIn (Tx.txId signedTx) 2
+        scriptTxIn5 = Tx.txIn (Tx.txId signedTx) 3
+    walletTxOut1 <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn1 "TN.getTxOutAtAddress"
+    walletTxOut2 <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn2 "TN.getTxOutAtAddress"
+    scriptTxOut4 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo) scriptTxIn4 "TN.getTxOutAtAddress"
+    scriptTxOut5 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo) scriptTxIn5 "TN.getTxOutAtAddress"
+    walletTxOutHasValue1 <- Q.txOutHasValue walletTxOut1 (C.lovelaceToValue 4_000_000)
+    walletTxOutHasValue2 <- Q.txOutHasValue walletTxOut2 (C.lovelaceToValue 2_000_000)
+    scriptTxOutHasValue4 <- Q.txOutHasValue scriptTxOut4 (C.lovelaceToValue 5_000_000)
+    scriptTxOutHasValue5 <- Q.txOutHasValue scriptTxOut5 (C.lovelaceToValue 6_000_000)
+    Helpers.Test.assert "Funds Locked and Unlocked" (walletTxOutHasValue1 && walletTxOutHasValue2 && scriptTxOutHasValue4 && scriptTxOutHasValue5)
