@@ -38,6 +38,7 @@
 
 ### Spending 
 - Locking and spending multiple UTxOs in/from the same script address in the same transaction
+- Locking and spending multiple UTxOs in/from different script address in the same transaction
 
 ## Steps to run
 1. `nix develop`

@@ -533,7 +533,7 @@ verifyBlake2b224ForValidatingPubKeyHashTest networkOptions TestParams{localNodeC
 verifyReferenceInputVisibilityTestInfo :: TestInfo era
 verifyReferenceInputVisibilityTestInfo =
     TestInfo
-        { testName = "verifyReferenceInputVisibilityTestInfo"
+        { testName = "verifyReferenceInputVisibilityTest"
         , testDescription =
             "Verify visibility of reference input's datum, value and address to unlock a UTxO."
         , test = verifyReferenceInputVisibilityTest
@@ -701,47 +701,47 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
 
 -- locking multiple UTxOs in the same script address in the same transaction
 -- spending multiple UTxOs from the same sctipt address in the same transaction
-verifyLockingAndSpendingInSameTxTestInfo :: TestInfo era
-verifyLockingAndSpendingInSameTxTestInfo =
+verifyLockingAndSpendingInSameScriptTestInfo :: TestInfo era
+verifyLockingAndSpendingInSameScriptTestInfo =
     TestInfo
-        { testName = "verifyLockingAndSpendingInSameTxTest"
+        { testName = "verifyLockingAndSpendingInSameScriptTest"
         , testDescription =
             "Verify locking and spending multiple UTxOs in/from the same script address in the same transaction."
-        , test = verifyLockingAndSpendingInSameTxTest
+        , test = verifyLockingAndSpendingInSameScriptTest
         }
 
-verifyLockingAndSpendingInSameTxTest ::
+verifyLockingAndSpendingInSameScriptTest ::
     (MonadIO m, MonadTest m) =>
     TN.TestEnvironmentOptions era ->
     TestParams era ->
     m (Maybe String)
-verifyLockingAndSpendingInSameTxTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+verifyLockingAndSpendingInSameScriptTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
     era <- TN.eraFromOptionsM networkOptions
     skeyAndAddress <- TN.w tempAbsPath networkId
     let (w1SKey, w1Address) = skeyAndAddress !! 0
         sbe = toShelleyBasedEra era
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     let collateral = Tx.txInsCollateral era [txIn]
-        datumRedeemer :: Integer = 10046737
-        simpleScriptInfo = v3ScriptInfo networkId (V3.Spend.SimpleScript.validator)
+        paramRedeemer :: Integer = 10046737
+        simpleScriptInfo = v3ScriptInfo networkId (V3.Spend.SimpleScript.validator paramRedeemer)
         scriptTxOut1 =
             Tx.txOutWithInlineDatum
                 era
                 (C.lovelaceToValue 4_000_000)
                 (address simpleScriptInfo)
-                (dataToHashableScriptData datumRedeemer)
+                (dataToHashableScriptData ())
         scriptTxOut2 =
             Tx.txOutWithInlineDatum
                 era
                 (C.lovelaceToValue 3_000_000)
                 (address simpleScriptInfo)
-                (dataToHashableScriptData datumRedeemer)
+                (dataToHashableScriptData ())
         scriptTxOut3 =
             Tx.txOutWithInlineDatum
                 era
                 (C.lovelaceToValue 2_000_000)
                 (address simpleScriptInfo)
-                (dataToHashableScriptData datumRedeemer)
+                (dataToHashableScriptData ())
         fundScriptAddress =
             (Tx.emptyTxBodyContent sbe pparams)
                 { C.txIns = Tx.pubkeyTxIns [txIn]
@@ -771,7 +771,7 @@ verifyLockingAndSpendingInSameTxTest networkOptions TestParams{localNodeConnectI
                     (C.PlutusScriptLanguage C.PlutusScriptV3)
                     (Left $ PlutusScriptSerialised (sbs simpleScriptInfo))
                     C.InlineScriptDatum
-                    (dataToHashableScriptData datumRedeemer)
+                    (dataToHashableScriptData paramRedeemer)
         redeemTxOut1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w2Address
         redeemTxOut2 = Tx.txOut era (C.lovelaceToValue 2_000_000) w2Address
         scriptTxOut4 =
@@ -779,13 +779,13 @@ verifyLockingAndSpendingInSameTxTest networkOptions TestParams{localNodeConnectI
                 era
                 (C.lovelaceToValue 5_000_000)
                 (address simpleScriptInfo)
-                (dataToHashableScriptData datumRedeemer)
+                (dataToHashableScriptData ())
         scriptTxOut5 =
             Tx.txOutWithInlineDatum
                 era
                 (C.lovelaceToValue 6_000_000)
                 (address simpleScriptInfo)
-                (dataToHashableScriptData datumRedeemer)
+                (dataToHashableScriptData ())
         txBodyContent =
             (Tx.emptyTxBodyContent sbe pparams)
                 { C.txIns =
@@ -809,3 +809,97 @@ verifyLockingAndSpendingInSameTxTest networkOptions TestParams{localNodeConnectI
     scriptTxOutHasValue4 <- Q.txOutHasValue scriptTxOut4 (C.lovelaceToValue 5_000_000)
     scriptTxOutHasValue5 <- Q.txOutHasValue scriptTxOut5 (C.lovelaceToValue 6_000_000)
     Helpers.Test.assert "Funds Locked and Unlocked" (walletTxOutHasValue1 && walletTxOutHasValue2 && scriptTxOutHasValue4 && scriptTxOutHasValue5)
+
+-- locking utxos to different script address in the same transaction
+-- redeeming utxos from different script addresses in the same transaction
+verifyLockingAndSpendingInDifferentScriptTestInfo :: TestInfo era
+verifyLockingAndSpendingInDifferentScriptTestInfo =
+    TestInfo
+        { testName = "verifyLockingAndSpendingInDifferentScriptTest"
+        , testDescription =
+            "Verify locking and spending multiple UTxOs in/from different script address in the same transaction."
+        , test = verifyLockingAndSpendingInDifferentScriptTest
+        }
+verifyLockingAndSpendingInDifferentScriptTest ::
+    (MonadIO m, MonadTest m) =>
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyLockingAndSpendingInDifferentScriptTest networkOptions TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+    era <- TN.eraFromOptionsM networkOptions
+    skeyAndAddress <- TN.w tempAbsPath networkId
+    let (w1SKey, w1Address) = skeyAndAddress !! 0
+        sbe = toShelleyBasedEra era
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+    let collateral = Tx.txInsCollateral era [txIn]
+        paramRedeemer1 :: Integer = 9848447
+        paramRedeemer2 :: Integer = 1635243
+        simpleScriptInfo1 = v3ScriptInfo networkId (V3.Spend.SimpleScript.validator paramRedeemer1)
+        simpleScriptInfo2 = v3ScriptInfo networkId (V3.Spend.SimpleScript.validator paramRedeemer2)
+        script1TxOut =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 4_000_000)
+                (address simpleScriptInfo1)
+                (dataToHashableScriptData ())
+        script2TxOut =
+            Tx.txOutWithInlineDatum
+                era
+                (C.lovelaceToValue 5_000_000)
+                (address simpleScriptInfo2)
+                (dataToHashableScriptData ())
+        fundScriptAddress =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns = Tx.pubkeyTxIns [txIn]
+                , C.txInsCollateral = collateral
+                , C.txOuts = [script1TxOut, script2TxOut]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo fundScriptAddress w1Address w1SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let script1TxIn = Tx.txIn (Tx.txId signedTx) 0
+        script2TxIn = Tx.txIn (Tx.txId signedTx) 1
+    scriptTxOut1 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo1) script1TxIn "TN.getTxOutAtAddress"
+    scriptTxOut2 <- Q.getTxOutAtAddress era localNodeConnectInfo (address simpleScriptInfo2) script2TxIn "TN.getTxOutAtAddress"
+    scriptTxOut1HasValue <- Q.txOutHasValue scriptTxOut1 (C.lovelaceToValue 4_000_000)
+    scriptTxOut2HasValue <- Q.txOutHasValue scriptTxOut2 (C.lovelaceToValue 5_000_000)
+    Helpers.Test.assert "Scripts has been funded" (scriptTxOut1HasValue && scriptTxOut2HasValue)
+    -- redeem from both scripts in the same transaction
+    let (w2SKey, w2Address) = skeyAndAddress !! 1
+    txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w2Address
+    let collateral = Tx.txInsCollateral era [txIn]
+        scriptWitness1 =
+            C.ScriptWitness C.ScriptWitnessForSpending $
+                spendScriptWitness
+                    sbe
+                    (C.PlutusScriptLanguage C.PlutusScriptV3)
+                    (Left $ PlutusScriptSerialised (sbs simpleScriptInfo1))
+                    C.InlineScriptDatum
+                    (dataToHashableScriptData paramRedeemer1)
+        scriptWitness2 =
+            C.ScriptWitness C.ScriptWitnessForSpending $
+                spendScriptWitness
+                    sbe
+                    (C.PlutusScriptLanguage C.PlutusScriptV3)
+                    (Left $ PlutusScriptSerialised (sbs simpleScriptInfo2))
+                    C.InlineScriptDatum
+                    (dataToHashableScriptData paramRedeemer2)
+        redeemTxOut1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w2Address
+        redeemTxOut2 = Tx.txOut era (C.lovelaceToValue 5_000_000) w2Address
+        txBodyContent =
+            (Tx.emptyTxBodyContent sbe pparams)
+                { C.txIns =
+                    (Tx.scriptTxIn [script1TxIn] scriptWitness1)
+                        ++ (Tx.scriptTxIn [script2TxIn] scriptWitness2)
+                        ++ (Tx.pubkeyTxIns [txIn])
+                , C.txInsCollateral = collateral
+                , C.txOuts = [redeemTxOut1, redeemTxOut2]
+                }
+    signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address w2SKey
+    Tx.submitTx sbe localNodeConnectInfo signedTx
+    let redeemedTxIn1 = Tx.txIn (Tx.txId signedTx) 0
+        redeemedTxIn2 = Tx.txIn (Tx.txId signedTx) 1
+    walletTxOut1 <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn1 "TN.getTxOutAtAddress"
+    walletTxOut2 <- Q.getTxOutAtAddress era localNodeConnectInfo w2Address redeemedTxIn2 "TN.getTxOutAtAddress"
+    walletTxOutHasValue1 <- Q.txOutHasValue walletTxOut1 (C.lovelaceToValue 4_000_000)
+    walletTxOutHasValue2 <- Q.txOutHasValue walletTxOut2 (C.lovelaceToValue 5_000_000)
+    Helpers.Test.assert "Funds Unlocked" (walletTxOutHasValue1 && walletTxOutHasValue2)

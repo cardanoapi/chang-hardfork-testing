@@ -7,17 +7,19 @@
 
 module V3.Spend.SimpleScript where
 
+import PlutusCore.Core (plcVersion110)
 import PlutusLedgerApi.V3
+import PlutusTx (unsafeApplyCode)
 import PlutusTx qualified
-import PlutusTx.Builtins (equalsByteString)
+import PlutusTx.Lift (liftCode)
 import PlutusTx.Prelude
 
 {-# INLINEABLE mkValidator #-}
-mkValidator :: Integer -> Integer -> ScriptContext -> Bool
-mkValidator dat red ctx = dat == red
+mkValidator :: Integer -> () -> Integer -> ScriptContext -> Bool
+mkValidator param dat red ctx = param == red
 
-mkWrappedValidator :: BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator dat_ red_ ctx_ = check $ mkValidator (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
+mkWrappedValidator :: Integer -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+mkWrappedValidator param dat_ red_ ctx_ = check $ mkValidator param (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
 
-validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
-validator = $$(PlutusTx.compile [||mkWrappedValidator||])
+validator :: Integer -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator param = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 param

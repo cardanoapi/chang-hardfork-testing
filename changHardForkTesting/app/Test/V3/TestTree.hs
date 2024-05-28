@@ -50,7 +50,8 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         , run verifyBlake2b224ForValidatingPubKeyHashTestInfo
         , run verifyReferenceInputVisibilityTestInfo
         , run verifyMaxExUnitsMintingTestInfo
-        , run verifyLockingAndSpendingInSameTxTestInfo
+        , run verifyLockingAndSpendingInSameScriptTestInfo
+        , run verifyLockingAndSpendingInDifferentScriptTestInfo
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
