@@ -14,10 +14,13 @@ import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Debug.Trace qualified as Debug
 import Hedgehog hiding (test)
+import Hedgehog qualified as H
 import Hedgehog.Gen hiding (map)
-import Helpers.Common (makeAddressWithStake, toShelleyBasedEra)
+import Helpers.Common (makeAddressWithStake, toConwayEraOnwards, toShelleyBasedEra)
 import Helpers.PlutusScripts (mintScriptWitness, mintScriptWitness', plutusL3, spendScriptWitness)
 import Helpers.Query qualified as Q
+import Helpers.StakePool (StakePool (..))
+import Helpers.Staking
 import Helpers.Test (assert)
 import Helpers.TestData (TestInfo (..), TestParams (..))
 import Helpers.Testnet qualified as TN
@@ -981,3 +984,66 @@ verifyMultiSigRequirementTest networkOptions TestParams{localNodeConnectInfo, pp
     w3TxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w3Address redeemedTxIn "TN.getTxOutAtAddress"
     w3TxOutHasValue <- Q.txOutHasValue w3TxOut (C.lovelaceToValue 30_000_000)
     Helpers.Test.assert "Funds Unlocked" w3TxOutHasValue
+
+verifyMultipleStakeAddressRegistrationTestInfo :: [Staking era] -> TestInfo era
+verifyMultipleStakeAddressRegistrationTestInfo staking =
+    TestInfo
+        { testName = "verifyMultipleStakeAddressRegistrationTest"
+        , testDescription =
+            "Verify multiple stake address registration in a single transaction."
+        , test = verifyMultipleStakeAddressRegistrationTest staking
+        }
+
+verifyMultipleStakeAddressRegistrationTest ::
+    (MonadIO m, MonadTest m) =>
+    [Staking era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMultipleStakeAddressRegistrationTest
+    staking
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+        stakeDelegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        let
+            staking1 = staking !! 0
+            staking2 = staking !! 1
+            staking3 = staking !! 2
+            stakeDelegTxOut1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            stakeDelegTxOut2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeDelegTxOut3 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            stakeRegCert1 = stakeRegCert staking1
+            stakeRegCert2 = stakeRegCert staking2
+            stakeRegCert3 = stakeRegCert staking3
+            stakeDelegTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [stakeDelegTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [stakeRegCert1, stakeRegCert2, stakeRegCert3]
+                            [(stakeCred staking1), (stakeCred staking2), (stakeCred staking3)]
+                    , C.txOuts = [stakeDelegTxOut1, stakeDelegTxOut2, stakeDelegTxOut3]
+                    }
+        signedStakeDelegTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                stakeDelegTxBodyContent
+                w1Address
+                (Just 4)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakeKey (stakeSKey staking1)
+                , C.WitnessStakeKey (stakeSKey staking2)
+                , C.WitnessStakeKey (stakeSKey staking3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedStakeDelegTx
+        let expTxIn = Tx.txIn (Tx.txId signedStakeDelegTx) 0
+        stakeDelegResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show stakeDelegResultTxOut
+        return Nothing

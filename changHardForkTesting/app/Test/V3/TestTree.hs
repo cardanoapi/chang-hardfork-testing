@@ -9,6 +9,9 @@ import Data.Time.Clock.POSIX qualified as Time
 import GHC.Base
 import GHC.IO.Exception
 import Hedgehog qualified as H
+import Helpers.Common
+import Helpers.StakePool
+import Helpers.Staking
 import Helpers.Test
 import Helpers.TestData
 import Helpers.TestResults
@@ -33,9 +36,12 @@ data ResultsRefs = ResultsRefs
 pv9Tests :: IORef [TestResult] -> H.Property
 pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
     let options = TN.testnetOptionsConway9
-    preTestnetTime <- liftIO Time.getCurrentTime
+        ceo = toConwayEraOnwards $ TN.eraFromOptions options
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
         TN.setupTestEnvironment options tempAbsPath
+    preTestnetTime <- liftIO Time.getCurrentTime
+    stakePool1 <- generateStakePoolKeyCredentialsAndCertificate ceo networkId
+    staking <- generateStakeKeyCredentialAndCertificate ceo stakePool1
     let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
         run testInfo = runTest testInfo resultsRef options testParams
 
@@ -53,6 +59,7 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         , run verifyLockingAndSpendingInSameScriptTestInfo
         , run verifyLockingAndSpendingInDifferentScriptTestInfo
         , run verifyMultiSigRequirementTestInfo
+        , run $ verifyMultipleStakeAddressRegistrationTestInfo staking
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)

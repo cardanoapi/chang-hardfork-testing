@@ -41,6 +41,9 @@
 - Locking and spending multiple UTxOs in/from different script address in the same transaction
 - Spending a locked UTxO from a script fulfilling milti-signature requirements
 
+### Staking, Registration, Delegattion and Reward Withdrawl 
+- registering multiple stake address in a single transaction
+
 ## Steps to run
 1. `nix develop`
 2. `cabal run changHardForkTesting\`
