@@ -985,6 +985,7 @@ verifyMultiSigRequirementTest networkOptions TestParams{localNodeConnectInfo, pp
     w3TxOutHasValue <- Q.txOutHasValue w3TxOut (C.lovelaceToValue 30_000_000)
     Helpers.Test.assert "Funds Unlocked" w3TxOutHasValue
 
+-- mutiple stake address registration
 verifyMultipleStakeAddressRegistrationTestInfo :: [Staking era] -> TestInfo era
 verifyMultipleStakeAddressRegistrationTestInfo staking =
     TestInfo
@@ -1046,4 +1047,65 @@ verifyMultipleStakeAddressRegistrationTest
         stakeDelegResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show stakeDelegResultTxOut
+        return Nothing
+
+-- register multiple stake pool
+verifyMultipleStakePoolRegistrationTestInfo :: [StakePool era] -> TestInfo era
+verifyMultipleStakePoolRegistrationTestInfo stakePool =
+    TestInfo
+        { testName = "verifyMultipleStakePoolRegistrationTest"
+        , testDescription = "Register multiple stake pools in a single transaction"
+        , test = verifyMultipleStakePoolRegistrationTest stakePool
+        }
+
+verifyMultipleStakePoolRegistrationTest ::
+    (MonadTest m, MonadIO m) =>
+    [StakePool era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMultipleStakePoolRegistrationTest
+    stakePool
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let sbe = toShelleyBasedEra era
+            (w1SKey, _, w1Address) = skeyAndAddress !! 0
+        sPRegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        let
+            stakePool1 = stakePool !! 0
+            stakePool2 = stakePool !! 1
+            stakePool3 = stakePool !! 2
+            regSPTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            regSPTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [sPRegTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [(sPRegCert stakePool1), (sPRegCert stakePool2), (sPRegCert stakePool3)]
+                            [(sPStakeCred stakePool1), (sPStakeCred stakePool2), (sPStakeCred stakePool3)]
+                    , C.txOuts = [regSPTxOut]
+                    }
+        signedRegSPTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                regSPTxBodyContent
+                w1Address
+                (Just 7)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakePoolKey (sPSKey stakePool1)
+                , C.WitnessStakePoolKey (sPSKey stakePool2)
+                , C.WitnessStakePoolKey (sPSKey stakePool3)
+                , C.WitnessStakeKey (sPRewardKey stakePool1)
+                , C.WitnessStakeKey (sPRewardKey stakePool2)
+                , C.WitnessStakeKey (sPRewardKey stakePool3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedRegSPTx
+        let expTxIn = Tx.txIn (Tx.txId signedRegSPTx) 0
+        regDRepResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show regDRepResultTxOut
         return Nothing

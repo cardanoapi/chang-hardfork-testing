@@ -43,6 +43,7 @@
 
 ### Staking, Registration, Delegattion and Reward Withdrawl 
 - registering multiple stake address in a single transaction
+- registering multiple stake pools in a single transaction
 
 ## Steps to run
 1. `nix develop`

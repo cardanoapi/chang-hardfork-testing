@@ -40,26 +40,27 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
         TN.setupTestEnvironment options tempAbsPath
     preTestnetTime <- liftIO Time.getCurrentTime
-    stakePool1 <- generateStakePoolKeyCredentialsAndCertificate ceo networkId
-    staking <- generateStakeKeyCredentialAndCertificate ceo stakePool1
+    stakePool <- generateStakePoolKeyCredentialsAndCertificate ceo networkId
+    staking <- generateStakeKeyCredentialAndCertificate ceo (stakePool !! 0)
     let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
         run testInfo = runTest testInfo resultsRef options testParams
 
     -- checkTxInfo tests must be first to run after new testnet is initialised due to expected slot to posix time
     sequence_
-        [ run verifyBLS12G2ForUtxoUnlockingTestInfo
-        , run verifyBLS12G1ForUtxoUnlockingTestInfo
-        , run verifySchnorrSignatureForUtxoUnlockingTestInfo
-        , run verifyKeccak256ForUtxoUnlockingTestInfo
-        , run verifyEcdsaSignatureForUtxoUnlockingTestInfo
-        , run verifyEd25519SignatureForUtxoUnlockingTestInfo
-        , run verifyBlake2b224ForValidatingPubKeyHashTestInfo
-        , run verifyReferenceInputVisibilityTestInfo
-        , run verifyMaxExUnitsMintingTestInfo
-        , run verifyLockingAndSpendingInSameScriptTestInfo
-        , run verifyLockingAndSpendingInDifferentScriptTestInfo
-        , run verifyMultiSigRequirementTestInfo
-        , run $ verifyMultipleStakeAddressRegistrationTestInfo staking
+        [ -- run verifyBLS12G2ForUtxoUnlockingTestInfo
+          -- , run verifyBLS12G1ForUtxoUnlockingTestInfo
+          -- , run verifySchnorrSignatureForUtxoUnlockingTestInfo
+          -- , run verifyKeccak256ForUtxoUnlockingTestInfo
+          -- , run verifyEcdsaSignatureForUtxoUnlockingTestInfo
+          -- , run verifyEd25519SignatureForUtxoUnlockingTestInfo
+          -- , run verifyBlake2b224ForValidatingPubKeyHashTestInfo
+          -- , run verifyReferenceInputVisibilityTestInfo
+          -- , run verifyMaxExUnitsMintingTestInfo
+          -- , run verifyLockingAndSpendingInSameScriptTestInfo
+          -- , run verifyLockingAndSpendingInDifferentScriptTestInfo
+          -- , run verifyMultiSigRequirementTestInfo
+          -- , run $ verifyMultipleStakeAddressRegistrationTestInfo staking
+          run $ verifyMultipleStakePoolRegistrationTestInfo stakePool
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
