@@ -46,6 +46,7 @@
 - registering multiple stake pools in a single transaction
 - delegate to multiple stake pools in a single transaction
 - deRegistering multiple stake address in a single transaction
+- retiring multiple stake pools in a single transaction
 
 ## Steps to run
 1. `nix develop`

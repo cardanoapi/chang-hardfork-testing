@@ -9,6 +9,7 @@ module Test.V3.Tests where
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley
 import Cardano.Api.Shelley qualified as C
+import Cardano.Chain.Delegation.Validation.Interface (Environment (currentEpoch))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
@@ -19,7 +20,7 @@ import Hedgehog.Gen hiding (map)
 import Helpers.Common (makeAddressWithStake, toConwayEraOnwards, toShelleyBasedEra)
 import Helpers.PlutusScripts (mintScriptWitness, mintScriptWitness', plutusL3, spendScriptWitness)
 import Helpers.Query qualified as Q
-import Helpers.StakePool (StakePool (..))
+import Helpers.StakePool (StakePool (..), makeStakePoolRetireCertification)
 import Helpers.Staking
 import Helpers.Test (assert)
 import Helpers.TestData (TestInfo (..), TestParams (..))
@@ -1296,6 +1297,68 @@ verifyMultipleStakeAddressDeRegistraionTest
                 ]
         Tx.submitTx sbe localNodeConnectInfo signedStakeUnregTx
         let expTxIn = Tx.txIn (Tx.txId signedStakeUnregTx) 0
+        stakeDelegResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show stakeDelegResultTxOut
+        return Nothing
+
+verifyMultipleStakePoolRetireTestInfo :: [StakePool era] -> TestInfo era
+verifyMultipleStakePoolRetireTestInfo staking =
+    TestInfo
+        { testName = "verifyMultipleStakePoolRetireTest"
+        , testDescription = "Retire multiple stake pools in a single transaction"
+        , test = verifyMultipleStakePoolRetireTest staking
+        }
+
+verifyMultipleStakePoolRetireTest ::
+    (MonadTest m, MonadIO m) =>
+    [StakePool era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMultipleStakePoolRetireTest
+    stakePool
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let ceo = toConwayEraOnwards era
+            sbe = toShelleyBasedEra era
+            (w1SKey, _, w1Address) = skeyAndAddress !! 0
+        spRetireTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        currentEpoch <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch
+        let stakePool1 = stakePool !! 0
+            stakePool2 = stakePool !! 1
+            stakePool3 = stakePool !! 2
+            retireSPCert1 = makeStakePoolRetireCertification ceo stakePool1 (currentEpoch + 1)
+            retireSPCert2 = makeStakePoolRetireCertification ceo stakePool2 (currentEpoch + 1)
+            retireSPCert3 = makeStakePoolRetireCertification ceo stakePool3 (currentEpoch + 1)
+            spRetireTxOut = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            stakeDelegTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [spRetireTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [retireSPCert1, retireSPCert2, retireSPCert3]
+                            [(sPStakeCred stakePool1), (sPStakeCred stakePool2), (sPStakeCred stakePool3)]
+                    , C.txOuts = [spRetireTxOut]
+                    }
+        signedPoolRetireTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                stakeDelegTxBodyContent
+                w1Address
+                (Just 4)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakePoolKey (sPSKey stakePool1)
+                , C.WitnessStakePoolKey (sPSKey stakePool2)
+                , C.WitnessStakePoolKey (sPSKey stakePool3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedPoolRetireTx
+        let expTxIn = Tx.txIn (Tx.txId signedPoolRetireTx) 0
         stakeDelegResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show stakeDelegResultTxOut
