@@ -1242,3 +1242,61 @@ verifyMultipleStakePoolDelgationTest
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show stakeDelegResultTxOut
         return Nothing
+
+verifyMultipleStakeAddressDeRegistraionTestInfo :: [Staking era] -> TestInfo era
+verifyMultipleStakeAddressDeRegistraionTestInfo staking =
+    TestInfo
+        { testName = "verifyMultipleStakeAddressDeRegistraionTest"
+        , testDescription = "DeRegister multiple stake addresses in a single transaction"
+        , test = verifyMultipleStakeAddressDeRegistraionTest staking
+        }
+
+verifyMultipleStakeAddressDeRegistraionTest ::
+    (MonadTest m, MonadIO m) =>
+    [Staking era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMultipleStakeAddressDeRegistraionTest
+    staking
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let ceo = toConwayEraOnwards era
+            sbe = toShelleyBasedEra era
+            (w1SKey, _, w1Address) = skeyAndAddress !! 0
+        stakeDeRegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        let
+            staking1 = staking !! 0
+            staking2 = staking !! 1
+            staking3 = staking !! 2
+            stakeDeRegTxOut = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            stakeDeRegTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [stakeDeRegTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [stakeUnregCert staking1, stakeUnregCert staking2, stakeUnregCert staking3]
+                            [stakeCred staking1, stakeCred staking2, stakeCred staking3]
+                    , C.txOuts = [stakeDeRegTxOut]
+                    }
+        signedStakeUnregTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                stakeDeRegTxBodyContent
+                w1Address
+                (Just 4)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakeKey (stakeSKey staking1)
+                , C.WitnessStakeKey (stakeSKey staking2)
+                , C.WitnessStakeKey (stakeSKey staking3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedStakeUnregTx
+        let expTxIn = Tx.txIn (Tx.txId signedStakeUnregTx) 0
+        stakeDelegResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show stakeDelegResultTxOut
+        return Nothing
