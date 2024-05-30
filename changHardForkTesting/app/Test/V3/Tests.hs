@@ -1210,6 +1210,7 @@ verifyMultipleStakePoolDelgationTest
         regStakePoolResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show regStakePoolResultTxOut
+        -- delegating to stake pools
         stakeDelegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
         let stakeDelgCert1 = stakeDelegCert ceo (sPLedgerKeyHash stakePool1) (stakeCred staking1)
             stakeDelgCert2 = stakeDelegCert ceo (sPLedgerKeyHash stakePool2) (stakeCred staking2)
@@ -1264,7 +1265,7 @@ verifyMultipleStakeAddressDeRegistraionTest
     TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
         era <- TN.eraFromOptionsM networkOptions
         skeyAndAddress <- TN.w tempAbsPath networkId
-        let ceo = toConwayEraOnwards era
+        let
             sbe = toShelleyBasedEra era
             (w1SKey, _, w1Address) = skeyAndAddress !! 0
         stakeDeRegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address

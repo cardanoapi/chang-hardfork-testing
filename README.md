@@ -41,7 +41,7 @@
 - Locking and spending multiple UTxOs in/from different script address in the same transaction
 - Spending a locked UTxO from a script fulfilling milti-signature requirements
 
-### Staking, Registration, Delegattion and Reward Withdrawl 
+### Staking, Registration, Delegation, DeRegistration and Retirement 
 - registering multiple stake address in a single transaction
 - registering multiple stake pools in a single transaction
 - delegate to multiple stake pools in a single transaction
