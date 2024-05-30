@@ -1105,7 +1105,140 @@ verifyMultipleStakePoolRegistrationTest
                 ]
         Tx.submitTx sbe localNodeConnectInfo signedRegSPTx
         let expTxIn = Tx.txIn (Tx.txId signedRegSPTx) 0
-        regDRepResultTxOut <-
+        regStakePoolResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
-        H.annotate $ show regDRepResultTxOut
+        H.annotate $ show regStakePoolResultTxOut
+        return Nothing
+
+-- delegation to multiple stake pools in a single transaction
+verifyMultipleStakePoolDelgationTestInfo :: [Staking era] -> TestInfo era
+verifyMultipleStakePoolDelgationTestInfo staking =
+    TestInfo
+        { testName = "verifyMultipleStakePoolDelgationTest"
+        , testDescription = "Delegate to multiple stake pools with different stake keys in a single transaction"
+        , test = verifyMultipleStakePoolDelgationTest staking
+        }
+
+verifyMultipleStakePoolDelgationTest ::
+    (MonadTest m, MonadIO m) =>
+    [Staking era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+verifyMultipleStakePoolDelgationTest
+    staking
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let ceo = toConwayEraOnwards era
+            sbe = toShelleyBasedEra era
+            (w1SKey, _, w1Address) = skeyAndAddress !! 0
+        stakeRegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        -- register stake addresses
+        let staking1 = staking !! 0
+            staking2 = staking !! 1
+            staking3 = staking !! 2
+            stakeDelegTxOut1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            stakeDelegTxOut2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeDelegTxOut3 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            stakeRegCert1 = stakeRegCert staking1
+            stakeRegCert2 = stakeRegCert staking2
+            stakeRegCert3 = stakeRegCert staking3
+            stakeRegTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [stakeRegTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [stakeRegCert1, stakeRegCert2, stakeRegCert3]
+                            [(stakeCred staking1), (stakeCred staking2), (stakeCred staking3)]
+                    , C.txOuts = [stakeDelegTxOut1, stakeDelegTxOut2, stakeDelegTxOut3]
+                    }
+        signedStakeRegTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                stakeRegTxBodyContent
+                w1Address
+                (Just 4)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakeKey (stakeSKey staking1)
+                , C.WitnessStakeKey (stakeSKey staking2)
+                , C.WitnessStakeKey (stakeSKey staking3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedStakeRegTx
+        let expTxIn = Tx.txIn (Tx.txId signedStakeRegTx) 0
+        stakeRegResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show stakeRegResultTxOut
+        -- registering stake pools
+        spRegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        let
+            stakePool1 = stakeDelegationPool staking1
+            stakePool2 = stakeDelegationPool staking2
+            stakePool3 = stakeDelegationPool staking3
+            regSPTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            regSPTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [spRegTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [(sPRegCert stakePool1), (sPRegCert stakePool2), (sPRegCert stakePool3)]
+                            [(sPStakeCred stakePool1), (sPStakeCred stakePool2), (sPStakeCred stakePool3)]
+                    , C.txOuts = [regSPTxOut]
+                    }
+        signedRegSPTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                regSPTxBodyContent
+                w1Address
+                (Just 7)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakePoolKey (sPSKey stakePool1)
+                , C.WitnessStakePoolKey (sPSKey stakePool2)
+                , C.WitnessStakePoolKey (sPSKey stakePool3)
+                , C.WitnessStakeKey (sPRewardKey stakePool1)
+                , C.WitnessStakeKey (sPRewardKey stakePool2)
+                , C.WitnessStakeKey (sPRewardKey stakePool3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedRegSPTx
+        let expTxIn = Tx.txIn (Tx.txId signedRegSPTx) 0
+        regStakePoolResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show regStakePoolResultTxOut
+        stakeDelegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        let stakeDelgCert1 = stakeDelegCert ceo (sPLedgerKeyHash stakePool1) (stakeCred staking1)
+            stakeDelgCert2 = stakeDelegCert ceo (sPLedgerKeyHash stakePool2) (stakeCred staking2)
+            stakeDelgCert3 = stakeDelegCert ceo (sPLedgerKeyHash stakePool3) (stakeCred staking3)
+            stakeDelegTxOut = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeDelegTxBodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [stakeDelegTxIn]
+                    , C.txCertificates =
+                        Tx.txCertificates
+                            era
+                            [stakeDelgCert1, stakeDelgCert2, stakeDelgCert3]
+                            [stakeCred staking1, stakeCred staking2, stakeCred staking3]
+                    , C.txOuts = [stakeDelegTxOut]
+                    }
+        signedStakeDelegTx <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                stakeDelegTxBodyContent
+                w1Address
+                (Just 4)
+                [ C.WitnessPaymentKey w1SKey
+                , C.WitnessStakeKey (stakeSKey staking1)
+                , C.WitnessStakeKey (stakeSKey staking2)
+                , C.WitnessStakeKey (stakeSKey staking3)
+                ]
+        Tx.submitTx sbe localNodeConnectInfo signedStakeDelegTx
+        let expTxIn = Tx.txIn (Tx.txId signedStakeDelegTx) 0
+        stakeDelegResultTxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
+        H.annotate $ show stakeDelegResultTxOut
         return Nothing
