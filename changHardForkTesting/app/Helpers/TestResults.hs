@@ -52,7 +52,7 @@ testSuitesToJUnit testSuites =
     defElement
         { elName = QName "testsuites" Nothing Nothing
         , elAttribs =
-            [ Attr (QName "name" Nothing Nothing) "Antaeus E2E Tests"
+            [ Attr (QName "name" Nothing Nothing) "Plutus V3 Tests"
             , Attr
                 (QName "tests" Nothing Nothing)
                 (show $ map (\testSuite -> length $ suiteResults testSuite) testSuites)
