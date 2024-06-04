@@ -222,10 +222,6 @@ txIn txId txIx = C.TxIn txId (C.TxIx $ fromIntegral txIx)
 scriptTxIn txin wit =
     map (\txIn -> txInWitness txIn $ wit) txin
 
--- where
---   v3PlutusScript = C.inEonForEra (error $ notSupportedError era)
---     (\e -> C.PlutusScriptWitness e C.PlutusScriptV3 (C.PScript(C.PlutusScriptSerialised sbs)) C.InlineScriptDatum redeemer exUnits)
-
 pubkeyTxIns :: [C.TxIn] -> [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
 pubkeyTxIns =
     map (\txIn -> txInWitness txIn $ C.KeyWitness C.KeyWitnessForSpending)
@@ -409,6 +405,61 @@ buildTxWithError era localNodeConnectInfo txBody changeAddress mWitnessOverride 
     allInputs :: [C.TxIn]
     allInputs = do
         let
+            txIns = fst <$> C.txIns txBody
+            colTxIns = case C.txInsCollateral txBody of
+                C.TxInsCollateralNone -> []
+                C.TxInsCollateral _ colTxIns -> colTxIns
+            refTxIns = case C.txInsReference txBody of
+                C.TxInsReferenceNone -> []
+                C.TxInsReference _ refTxIns -> refTxIns
+
+        txIns ++ colTxIns ++ refTxIns
+
+getTxExecutionUnits ::
+    (MonadIO m) =>
+    C.CardanoEra era ->
+    C.LocalNodeConnectInfo ->
+    C.TxBody era ->
+    m (Integer, Integer)
+getTxExecutionUnits era localNodeConnectInfo tx = do
+    let
+        certs = do
+            case C.txCertificates (C.getTxBodyContent tx) of
+                C.TxCertificatesNone -> []
+                C.TxCertificates _ certs _ -> certs
+    localStateQueryResult <-
+        liftIO
+            ( C.executeLocalStateQueryExpr localNodeConnectInfo O.VolatileTip $
+                C.queryStateForBalancedTx era allInputs certs
+            )
+    let ( nodeEraUtxo
+            , ledgerPParams
+            , eraHistory
+            , systemStart
+            , _
+            , _
+            , _
+            ) =
+                U.unsafeFromRight $ U.unsafeFromRight localStateQueryResult
+        eitherExUnits =
+            C.evaluateTransactionExecutionUnits
+                era
+                systemStart
+                (C.toLedgerEpochInfo eraHistory)
+                ledgerPParams
+                nodeEraUtxo
+                tx
+        exUnits = pure (memSum, stepSum)
+          where
+            exUnitList = map (U.unsafeFromRight . snd) $ Map.toList $ U.unsafeFromRight eitherExUnits
+            memSum = foldr (\x acc -> acc + (toInteger $ C.executionMemory x)) 0 exUnitList
+            stepSum = foldr (\x acc -> acc + (toInteger $ C.executionSteps x)) 0 exUnitList
+    exUnits
+  where
+    allInputs :: [C.TxIn]
+    allInputs = do
+        let
+            txBody = C.getTxBodyContent tx
             txIns = fst <$> C.txIns txBody
             colTxIns = case C.txInsCollateral txBody of
                 C.TxInsCollateralNone -> []

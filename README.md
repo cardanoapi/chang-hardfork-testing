@@ -39,7 +39,7 @@
 ### Spending 
 - Locking and spending multiple UTxOs in/from the same script address in the same transaction
 - Locking and spending multiple UTxOs in/from different script address in the same transaction
-- Spending a locked UTxO from a script fulfilling milti-signature requirements
+- Spending a locked UTxO from a script with milti-signature requirements
 
 ### Staking, Registration, Delegation, DeRegistration and Retirement 
 - registering multiple stake address in a single transaction
@@ -47,6 +47,16 @@
 - delegate to multiple stake pools in a single transaction
 - deRegistering multiple stake address in a single transaction
 - retiring multiple stake pools in a single transaction
+
+### Efficiency Test 
+**PlutusV3 with plcVersion110** vs **PlutusV2 with plcVersion100**  
+
+*efficiency was tested by comparing execution units*
+| Test                                                    | Is efficient with PlutusV3 |
+| ------------------------------------------------------- | -------------------------- |
+| Minting NFT Script                                      | ✅                         |
+| Spending locked UTxO with multi-signature requirements  | ✅                         |
+
 
 ## Steps to run
 1. `nix develop`

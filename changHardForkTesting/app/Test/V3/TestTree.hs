@@ -60,6 +60,8 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         , run $ verifyMultipleStakePoolDelgationTestInfo multiPoolStaking
         , run $ verifyMultipleStakeAddressDeRegistraionTestInfo staking
         , run $ verifyMultipleStakePoolRetireTestInfo stakePool
+        , run verifyV3MintingEfficiencyTestInfo
+        , run verifyV3SpendingEfficiencyTestInfo
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)

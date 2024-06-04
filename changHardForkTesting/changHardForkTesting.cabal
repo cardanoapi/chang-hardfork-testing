@@ -84,6 +84,8 @@ executable changHardForkTesting
     Test.V3.Tests
     Test.V3.TestTree
     Utils
+    V2.Mint.VerifyMintingMaxExUnits
+    V2.Spend.VerifyMultiSig
     V3.Mint.VerifyMintingMaxExUnits
     V3.Spend.SimpleScript
     V3.Spend.VerifyBlake2b224

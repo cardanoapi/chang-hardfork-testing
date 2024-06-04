@@ -4,12 +4,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.1.0 #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.0.0 #-}
 
-module V3.Spend.VerifyMultiSig where
+module V2.Spend.VerifyMultiSig where
 
-import PlutusCore.Version (plcVersion110)
-import PlutusLedgerApi.V3
+import PlutusCore.Version (plcVersion100)
+import PlutusLedgerApi.V2
 import PlutusTx (liftCode)
 import PlutusTx qualified
 import PlutusTx.Builtins.Internal qualified as BI
@@ -56,4 +56,4 @@ mkWrappedValidator msp dat_ red_ ctx_ = check $ mkValidator msp (unsafeFromBuilt
             $ ds txInfo
 
 validator :: MultiSigParams -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
-validator params = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 params
+validator params = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion100 params

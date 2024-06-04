@@ -3,13 +3,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.1.0 #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.0.0 #-}
 
-module V3.Mint.VerifyMintingMaxExUnits where
+module V2.Mint.VerifyMintingMaxExUnits where
 
-import PlutusCore.Core (plcVersion110)
+import PlutusCore.Core (plcVersion100)
 import PlutusLedgerApi.V1.Value (flattenValue)
-import PlutusLedgerApi.V3
+import PlutusLedgerApi.V2
 import PlutusTx (liftCode)
 import PlutusTx qualified
 import PlutusTx.Builtins.Internal qualified as BI
@@ -42,4 +42,4 @@ mkWrappedValidator input red_ ctx_ = check $ mkValidator input (unsafeFromBuilti
     txMint = BI.head $ BI.tail $ BI.tail $ BI.tail $ BI.tail $ ds txInfo
 
 validator :: TxOutRef -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> ())
-validator input = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 input
+validator input = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion100 input
