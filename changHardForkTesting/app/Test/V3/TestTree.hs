@@ -42,7 +42,8 @@ efficiencyTests resultsRef = integrationRetryWorkspace 0 "efficiency" $ \tempAbs
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
         [ run verifyV3MintingEfficiencyTestInfo
-        , run verifyV3SpendingEfficiencyTestInfo
+        , run verifyV3MultiSigEfficiencyTestInfo
+        , run verifyV3TxInfoFieldsTestInfo
         ]
 
 stakingTests :: IORef [TestResult] -> H.Property

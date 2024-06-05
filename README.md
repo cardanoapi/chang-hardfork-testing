@@ -52,11 +52,15 @@
 ### Efficiency Test
 **PlutusV3 with plcVersion110** vs **PlutusV2 with plcVersion100**
 
-*Efficiency was tested by comparing execution units*
-| Test                                                   | Is efficient with PlutusV3 |
-| ------------------------------------------------------ | -------------------------- |
-| Minting NFT Script                                     | ✅                         |
-| Spending locked UTxO with multi-signature requirements | ✅                         |
+*Efficiency was tested by comparing execution units*  
+> **Note**: *These results are from a single test run and may slightly vary with manual testing*
+ 
+| Test                                                   | V3 Memory | V3 Steps   | V2 Memory | V2 Steps   | V3 Script Size | V2 Script Size | Memory Efficiency | Steps Efficiency |
+| ------------------------------------------------------ | --------- | ---------- | --------- | ---------- | -------------- | -------------- | ----------------- | ---------------- |
+| Minting NFT Script                                     | 127860    | 39,328,530 | 177942    | 52,197,788 | 930            | 1044           | 28% more efficient| 24% more efficient|
+| Spending locked UTxO with multi-signature requirements | 154794    | 42,044,864 | 210194    | 54,786,864 | 521            | 554            | 26% more efficient| 23% more efficient|
+| Spending V3 UTxO with TxInfo fields                    | 698538    | 219,734,456| 898318    | 270,202,834| 1967           | 2197           | 22% more efficient| 18% more efficient|
+
 
 ## Steps to run
 1. `nix develop`

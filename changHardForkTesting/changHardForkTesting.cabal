@@ -87,9 +87,11 @@ executable changHardForkTesting
     Test.V3.TestTree
     Utils
     V2.Mint.VerifyMintingMaxExUnits
+    V2.Spend.TxInfoFields
     V2.Spend.VerifyMultiSig
     V3.Mint.VerifyMintingMaxExUnits
     V3.Spend.SimpleScript
+    V3.Spend.TxInfoFields
     V3.Spend.VerifyBlake2b224
     V3.Spend.VerifyBLS12G1
     V3.Spend.VerifyBLS12G2
