@@ -11,7 +11,10 @@ import Cardano.Api qualified as C
 import Cardano.Api.Shelley hiding (Mainnet)
 import Data.ByteString qualified as BS
 import Data.ByteString.Short (ShortByteString)
+import Helpers.Common (makeAddressWithStake)
+import PlutusLedgerApi.Common
 import PlutusLedgerApi.V1.Bytes qualified as P
+import PlutusTx qualified
 import PlutusTx.IsData.Class
 
 data V3ScriptInfo = V3ScriptInfo
@@ -47,3 +50,21 @@ bytesFromHex = P.bytes . fromEither . P.fromHex
   where
     fromEither (Left e) = error $ show e
     fromEither (Right b) = b
+
+v3ScriptInfo :: NetworkId -> PlutusTx.CompiledCode a -> V3ScriptInfo
+v3ScriptInfo netId compiledCode = do
+    let sbs = serialiseCompiledCode compiledCode
+        script = PlutusScript PlutusScriptV3 $ PlutusScriptSerialised $ sbs
+        hash = hashScript script
+        address = makeAddressWithStake (Right hash) Nothing netId
+        info = V3ScriptInfo address script hash sbs
+    info
+
+v2ScriptInfo :: NetworkId -> PlutusTx.CompiledCode a -> V2ScriptInfo
+v2ScriptInfo netId compiledCode = do
+    let sbs = serialiseCompiledCode compiledCode
+        script = PlutusScript PlutusScriptV2 $ PlutusScriptSerialised $ sbs
+        hash = hashScript script
+        address = makeAddressWithStake (Right hash) Nothing netId
+        info = V2ScriptInfo address script hash sbs
+    info

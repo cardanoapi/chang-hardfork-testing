@@ -81,7 +81,9 @@ executable changHardForkTesting
     Helpers.TypeConverters
     Helpers.Utils
     Test.V3.DummyDataTypes
-    Test.V3.Tests
+    Test.V3.EfficiencyTests
+    Test.V3.PlutusTests
+    Test.V3.StakingTests
     Test.V3.TestTree
     Utils
     V2.Mint.VerifyMintingMaxExUnits
