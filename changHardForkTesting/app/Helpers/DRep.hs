@@ -29,12 +29,14 @@ data DRep era
 generateDRepKeyCredentialsAndCertificate ::
     (MonadIO m) =>
     C.ConwayEraOnwards era ->
-    m (DRep era)
+    m [DRep era]
 generateDRepKeyCredentialsAndCertificate ceo = do
-    dRepSkey <- liftIO $ C.generateSigningKey C.AsDRepKey
-    let C.DRepKeyHash dRepKeyHash = C.verificationKeyHash $ C.getVerificationKey dRepSkey
-        dRepVotingCredential = C.conwayEraOnwardsConstraints ceo $ C.KeyHashObj dRepKeyHash
-    buildDRep ceo dRepVotingCredential (Just dRepSkey)
+    dRepSKeys <- mapM id $ take 20 $ repeat $ liftIO $ C.generateSigningKey C.AsDRepKey
+    let generateDRepHelper skey = do
+            let C.DRepKeyHash dRepKeyHash = C.verificationKeyHash $ C.getVerificationKey skey
+                dRepVotingCredential = C.conwayEraOnwardsConstraints ceo $ C.KeyHashObj dRepKeyHash
+            buildDRep ceo dRepVotingCredential (Just skey)
+    mapM generateDRepHelper dRepSKeys
 
 produceDRepScriptCredentialsAndCertificate ::
     (MonadIO m) =>

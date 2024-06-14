@@ -80,6 +80,8 @@ executable changHardForkTesting
     Helpers.Tx
     Helpers.TypeConverters
     Helpers.Utils
+    Test.Bench.Governance
+    Test.Bench.Users
     Test.V3.DummyDataTypes
     Test.V3.EfficiencyTests
     Test.V3.PlutusTests

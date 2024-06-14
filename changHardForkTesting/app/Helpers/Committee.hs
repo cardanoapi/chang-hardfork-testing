@@ -22,39 +22,44 @@ data Committee era = Committee
 generateCommitteeKeysAndCertificate ::
     (MonadIO m) =>
     C.ConwayEraOnwards era ->
-    m (Committee era)
+    m [Committee era]
 generateCommitteeKeysAndCertificate ceo = do
-    -- generate committee cold key
-    committeeColdSKey <- liftIO $ C.generateSigningKey C.AsCommitteeColdKey
-    let
-        committeeColdVerificationKey@(C.CommitteeColdVerificationKey committeeColdVkey) =
-            C.getVerificationKey committeeColdSKey
-        committeeColdHash = C.verificationKeyHash committeeColdVerificationKey
+    -- Generate multiple sets of committee cold keys and hot keys
+    committeeColdSKeys <- mapM id $ take 4 $ repeat $ liftIO $ C.generateSigningKey C.AsCommitteeColdKey
+    committeeHotSKeys <- mapM id $ take 4 $ repeat $ liftIO $ C.generateSigningKey C.AsCommitteeHotKey
 
-    -- generate committee hot key
-    committeeHotSKey <- liftIO $ C.generateSigningKey C.AsCommitteeHotKey
-    let
-        _committeeHotVerificationKey@(C.CommitteeHotVerificationKey committeeHotVKey) =
-            C.getVerificationKey committeeHotSKey
+    -- Helper function to generate a Committee from a pair of cold and hot keys
+    let generateCommitteeHelper (coldSKey, hotSKey) = do
+            let committeeColdVerificationKey@(C.CommitteeColdVerificationKey committeeColdVkey) =
+                    C.getVerificationKey coldSKey
+                committeeColdHash = C.verificationKeyHash committeeColdVerificationKey
 
-        -- produce committee hot key authorization certificate
-        ckh = C.conwayEraOnwardsConstraints ceo $ Keys.hashKey committeeColdVkey
-        hkh = C.conwayEraOnwardsConstraints ceo $ Keys.hashKey committeeHotVKey
-        committeeHotRequirements = C.CommitteeHotKeyAuthorizationRequirements ceo ckh hkh
-        committeeHotKeyAuthCert = C.makeCommitteeHotKeyAuthorizationCertificate committeeHotRequirements
+                _committeeHotVerificationKey@(C.CommitteeHotVerificationKey committeeHotVKey) =
+                    C.getVerificationKey hotSKey
 
-        -- produce committee voter
-        C.CommitteeHotKeyHash committeeHotHash = C.verificationKeyHash $ C.getVerificationKey committeeHotSKey
-        dRepVotingCredential = C.conwayEraOnwardsConstraints ceo C.KeyHashObj committeeHotHash
-        committeeVoter = C.CommitteeVoter dRepVotingCredential
-    return $
-        Committee
-            committeeColdSKey
-            committeeColdVerificationKey
-            committeeColdHash
-            committeeHotSKey
-            committeeHotKeyAuthCert
-            committeeVoter
+                -- Produce committee hot key authorization certificate
+                ckh = C.conwayEraOnwardsConstraints ceo $ Keys.hashKey committeeColdVkey
+                hkh = C.conwayEraOnwardsConstraints ceo $ Keys.hashKey committeeHotVKey
+                committeeHotRequirements = C.CommitteeHotKeyAuthorizationRequirements ceo ckh hkh
+                committeeHotKeyAuthCert = C.makeCommitteeHotKeyAuthorizationCertificate committeeHotRequirements
+
+                -- Produce committee voter
+                C.CommitteeHotKeyHash committeeHotHash = C.verificationKeyHash $ C.getVerificationKey hotSKey
+                dRepVotingCredential = C.conwayEraOnwardsConstraints ceo $ C.KeyHashObj committeeHotHash
+                committeeVoter = C.CommitteeVoter dRepVotingCredential
+
+            return $
+                Committee
+                    coldSKey
+                    committeeColdVerificationKey
+                    committeeColdHash
+                    hotSKey
+                    committeeHotKeyAuthCert
+                    committeeVoter
+
+    -- Generate the list of Committees
+    committees <- mapM generateCommitteeHelper (zip committeeColdSKeys committeeHotSKeys)
+    return committees
 
 castCommittee :: C.SigningKey C.CommitteeHotKey -> C.SigningKey C.PaymentKey
 castCommittee (C.CommitteeHotSigningKey committeeHotSK) = C.PaymentSigningKey committeeHotSK

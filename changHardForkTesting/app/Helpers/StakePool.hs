@@ -26,58 +26,49 @@ generateStakePoolKeyCredentialsAndCertificate ::
     (MonadIO m) =>
     C.ConwayEraOnwards era ->
     C.NetworkId ->
-    m [(StakePool era)]
+    m (StakePool era)
 generateStakePoolKeyCredentialsAndCertificate ceo networkId = do
-    stakePoolSkey1 <- liftIO $ C.generateSigningKey C.AsStakePoolKey
-    stakePoolVrfKey1 <- liftIO $ C.generateSigningKey C.AsVrfKey
-    stakePoolRewardKey1 <- liftIO $ C.generateSigningKey C.AsStakeKey
-    stakePoolSkey2 <- liftIO $ C.generateSigningKey C.AsStakePoolKey
-    stakePoolVrfKey2 <- liftIO $ C.generateSigningKey C.AsVrfKey
-    stakePoolRewardKey2 <- liftIO $ C.generateSigningKey C.AsStakeKey
-    stakePoolSkey3 <- liftIO $ C.generateSigningKey C.AsStakePoolKey
-    stakePoolVrfKey3 <- liftIO $ C.generateSigningKey C.AsVrfKey
-    stakePoolRewardKey3 <- liftIO $ C.generateSigningKey C.AsStakeKey
+    stakePoolSkey <- liftIO $ C.generateSigningKey C.AsStakePoolKey
+    stakePoolVrfKey <- liftIO $ C.generateSigningKey C.AsVrfKey
+    stakePoolRewardKey <- liftIO $ C.generateSigningKey C.AsStakeKey
     let
-        makeStakePool stakePoolSkey stakePoolVrfKey stakePoolRewardKey =
-            let
-                stakePoolOwnerVKey = C.getVerificationKey stakePoolRewardKey
-                stakePoolOwnerVKeyHash = C.verificationKeyHash stakePoolOwnerVKey
-                stakePoolKeyHash@(C.StakePoolKeyHash ledgerStakePoolKeyHash) =
-                    C.verificationKeyHash $ C.getVerificationKey stakePoolSkey
-                stakePoolVrfKeyHash@(C.VrfKeyHash _vrfKeyHash) = C.verificationKeyHash $ C.getVerificationKey stakePoolVrfKey
-                stakePoolStakeCred = C.StakeCredentialByKey (C.verificationKeyHash stakePoolOwnerVKey)
-                rewardAccountAddr = C.makeStakeAddress networkId stakePoolStakeCred
-                stakePoolParams =
-                    C.StakePoolParameters
-                        { C.stakePoolId = stakePoolKeyHash
-                        , C.stakePoolVRF = stakePoolVrfKeyHash
-                        , C.stakePoolCost = C.Lovelace 0
-                        , C.stakePoolMargin = 0 % 1
-                        , C.stakePoolRewardAccount = rewardAccountAddr
-                        , C.stakePoolPledge = 0
-                        , C.stakePoolOwners = [stakePoolOwnerVKeyHash]
-                        , C.stakePoolRelays = [C.StakePoolRelayIp Nothing Nothing Nothing]
-                        , C.stakePoolMetadata = Nothing
-                        }
-                ledgerStakePoolParams = C.conwayEraOnwardsConstraints ceo $ C.toShelleyPoolParams stakePoolParams
-                stakePoolRegReq = C.StakePoolRegistrationRequirementsConwayOnwards ceo ledgerStakePoolParams
-                stakePoolRegistrationCert = C.makeStakePoolRegistrationCertificate stakePoolRegReq
-                stakePoolVoter = C.StakePoolVoter $ C.conwayEraOnwardsConstraints ceo ledgerStakePoolKeyHash
-             in
-                StakePool
-                    stakePoolSkey
-                    stakePoolVrfKey
-                    stakePoolRewardKey
-                    stakePoolKeyHash
-                    stakePoolOwnerVKeyHash
-                    ledgerStakePoolKeyHash
-                    stakePoolStakeCred
-                    stakePoolRegistrationCert
-                    stakePoolVoter
-        stakePool1 = makeStakePool stakePoolSkey1 stakePoolVrfKey1 stakePoolRewardKey1
-        stakePool2 = makeStakePool stakePoolSkey2 stakePoolVrfKey2 stakePoolRewardKey2
-        stakePool3 = makeStakePool stakePoolSkey3 stakePoolVrfKey3 stakePoolRewardKey3
-    return $ [stakePool1, stakePool2, stakePool3]
+        stakePoolOwnerVKey = C.getVerificationKey stakePoolRewardKey
+        stakePoolOwnerVKeyHash = C.verificationKeyHash stakePoolOwnerVKey
+        stakePoolKeyHash@(C.StakePoolKeyHash ledgerStakePoolKeyHash) =
+            C.verificationKeyHash $ C.getVerificationKey stakePoolSkey
+        stakePoolVrfKeyHash@(C.VrfKeyHash _vrfKeyHash) = C.verificationKeyHash $ C.getVerificationKey stakePoolVrfKey
+        stakePoolStakeCred = C.StakeCredentialByKey (C.verificationKeyHash stakePoolOwnerVKey)
+        rewardAccountAddr = C.makeStakeAddress networkId stakePoolStakeCred
+
+        stakePoolParams =
+            C.StakePoolParameters
+                { C.stakePoolId = stakePoolKeyHash
+                , C.stakePoolVRF = stakePoolVrfKeyHash
+                , C.stakePoolCost = C.Lovelace 0
+                , C.stakePoolMargin = 0 % 1
+                , C.stakePoolRewardAccount = rewardAccountAddr
+                , C.stakePoolPledge = 0
+                , C.stakePoolOwners = [stakePoolOwnerVKeyHash]
+                , C.stakePoolRelays = [C.StakePoolRelayIp Nothing Nothing Nothing]
+                , C.stakePoolMetadata = Nothing
+                }
+
+        ledgerStakePoolParams = C.conwayEraOnwardsConstraints ceo $ C.toShelleyPoolParams stakePoolParams
+        stakePoolRegReq = C.StakePoolRegistrationRequirementsConwayOnwards ceo ledgerStakePoolParams
+        stakePoolRegistrationCert = C.makeStakePoolRegistrationCertificate stakePoolRegReq
+        stakePoolVoter = C.StakePoolVoter $ C.conwayEraOnwardsConstraints ceo ledgerStakePoolKeyHash
+
+    return $
+        StakePool
+            stakePoolSkey
+            stakePoolVrfKey
+            stakePoolRewardKey
+            stakePoolKeyHash
+            stakePoolOwnerVKeyHash
+            ledgerStakePoolKeyHash
+            stakePoolStakeCred
+            stakePoolRegistrationCert
+            stakePoolVoter
 
 makeStakePoolRetireCertification ::
     C.ConwayEraOnwards era -> StakePool era -> C.EpochNo -> C.Certificate era
