@@ -3,7 +3,7 @@
 module Helpers.Utils where
 
 import Cardano.Api qualified as C
-import Control.Monad (when)
+import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor (void)
 import Data.List (intersperse)
@@ -15,12 +15,14 @@ import Hedgehog qualified as H
 import Hedgehog.Extras qualified as H
 import Hedgehog.Extras qualified as HE
 import Hedgehog.Extras.Stock.CallStack qualified as H
+import Helpers.Common (makeAddress)
 import Helpers.PlutusScripts (mintScriptWitness', plutusL3, toScriptData)
 import System.Directory qualified as IO
 import System.Environment qualified as IO
 import System.IO qualified as IO
 import System.IO.Temp qualified as IO
 import System.Info qualified as IO
+import System.Random (randomRIO)
 
 -- | Right from Either or throw Left error
 unsafeFromRight :: (Show l) => Either l r -> r
@@ -84,3 +86,17 @@ anyLeftFail es = mapM (HE.leftFailM . return) =<< es
 -- | Fails any Left returning unit.
 anyLeftFail_ :: (MonadTest m, Show e) => m [Either e a] -> m ()
 anyLeftFail_ = void . anyLeftFail
+
+pickRandomElements :: (MonadTest m, MonadIO m) => Int -> [a] -> m [a]
+pickRandomElements n xs = do
+    indices <- replicateM n $ randomRIO (0, length xs - 1)
+    return [xs !! i | i <- indices]
+
+getChunk :: Int -> Int -> [a] -> [a]
+getChunk chunkSize chunkIndex = take chunkSize . drop (chunkSize * chunkIndex)
+
+getVkey :: C.SigningKey C.PaymentKey -> C.VerificationKey C.PaymentKey
+getVkey skey = C.getVerificationKey skey
+
+paymentKeyToAddress :: C.SigningKey C.PaymentKey -> C.NetworkId -> C.Address C.ShelleyAddr
+paymentKeyToAddress skey netId = makeAddress (Left $ getVkey skey) netId

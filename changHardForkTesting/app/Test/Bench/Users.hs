@@ -15,17 +15,14 @@ import Helpers.StakePool qualified as Helper
 --  generate shelley wallet
 data ShelleyWallet era = ShelleyWallet
     { stakeSKey :: C.SigningKey C.StakeKey
-    , stakeCred :: C.StakeCredential
+    , paymentSKey :: C.SigningKey C.PaymentKey
     }
     deriving (Show)
 
 generateShelleyWallet :: (MonadIO m) => m [ShelleyWallet era]
 generateShelleyWallet = do
-    stakeSKeys <- mapM id $ take 100 $ repeat $ liftIO $ C.generateSigningKey C.AsStakeKey
+    stakeSKeys <- mapM id $ take 500 $ repeat $ liftIO $ C.generateSigningKey C.AsStakeKey
+    paymentSKeys <- mapM id $ take 500 $ repeat $ liftIO $ C.generateSigningKey C.AsPaymentKey
     let stakeCreds = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
-        wallets = zipWith (\sk cred -> ShelleyWallet sk cred) stakeSKeys stakeCreds
+        wallets = zipWith (\sk pk -> ShelleyWallet sk pk) stakeSKeys paymentSKeys
     pure wallets
-
--- 100 shelley wallets generated
--- 20 DReps generated
--- 4 CC members

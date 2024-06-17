@@ -9,6 +9,7 @@ module Test.V3.StakingTests where
 import Cardano.Api qualified as C
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Debug.Trace qualified as Debug
 import Hedgehog hiding (test)
 import Hedgehog qualified as H
 import Helpers.Common (toConwayEraOnwards, toShelleyBasedEra)
@@ -81,6 +82,7 @@ verifyMultipleStakeAddressRegistrationTest
         stakeDelegResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show stakeDelegResultTxOut
+        Debug.traceM ((show (length staking)) ++ " Stake Addresses registered")
         return Nothing
 
 -- register multiple stake pool
@@ -142,6 +144,7 @@ verifyMultipleStakePoolRegistrationTest
         regStakePoolResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show regStakePoolResultTxOut
+        Debug.traceM ((show (length stakePool)) ++ " Stake Pools registered")
         return Nothing
 
 -- delegation to multiple stake pools in a single transaction

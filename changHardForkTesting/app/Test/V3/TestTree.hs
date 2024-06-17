@@ -116,10 +116,14 @@ pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbs
     let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
-        [ run $ registerShelleyWalletsTestInfo shelleyWallets
+        [ -- commenting this one out for now, because it takes a lot of time
+          run $ fundShelleyWalletsTestInfo shelleyWallets
+        , run $ registerShelleyWalletsTestInfo shelleyWallets
         , run $ registerDrepsInfo dReps
         , run $ registerCCMembersInfo ccMembers
         , run $ verifyMultipleStakePoolRegistrationTestInfo stakePools
+        , run $ delegateAdaHolderToDRepsTestInfo shelleyWallets dReps
+        , run $ delegateAdaHolderToStakePoolsTestInfo shelleyWallets stakePools
         ]
 
 tests :: ResultsRefs -> TestTree

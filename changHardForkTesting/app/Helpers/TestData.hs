@@ -8,6 +8,8 @@ import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO)
 import Data.Time.Clock (UTCTime)
 import Hedgehog (MonadTest)
+import Hedgehog.Internal.Property qualified as H
+import Helpers.Query qualified as Q
 import Helpers.Testnet qualified as TN
 
 type TestFunction era =
@@ -38,3 +40,16 @@ data TestParams era = TestParams
     , tempAbsPath :: FilePath
     , mTime :: Maybe UTCTime
     }
+
+verifyTxConfirmation ::
+    (MonadTest m, MonadIO m) =>
+    C.CardanoEra era ->
+    C.LocalNodeConnectInfo ->
+    C.Address C.ShelleyAddr ->
+    C.TxIn ->
+    m (Maybe String)
+verifyTxConfirmation era localNodeConnectInfo address txin = do
+    resultTxOut <-
+        Q.getTxOutAtAddress era localNodeConnectInfo address txin "getTxOutAtAddress"
+    H.annotate $ show resultTxOut
+    return Nothing
