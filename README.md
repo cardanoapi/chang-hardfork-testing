@@ -53,7 +53,6 @@
 **PlutusV3 with plcVersion110** vs **PlutusV2 with plcVersion100**
 
 *Efficiency was tested by comparing execution units*  
-> **Note**: *These results are from a single test run and may slightly vary with manual testing*
  
 | Test                                                   | V3 Memory | V3 Steps   | V2 Memory | V2 Steps   | V3 Script Size | V2 Script Size | Memory Efficiency | Steps Efficiency |
 | ------------------------------------------------------ | --------- | ---------- | --------- | ---------- | -------------- | -------------- | ----------------- | ---------------- |
