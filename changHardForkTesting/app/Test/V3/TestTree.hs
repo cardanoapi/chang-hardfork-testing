@@ -32,7 +32,10 @@ import Text.XML.Light.Output
 import Prelude hiding (mapM)
 
 data ResultsRefs = ResultsRefs
-    { pv9ResultsRef :: IORef [TestResult]
+    { plutusV3ResultsRef :: IORef [TestResult]
+    , spendingResultsRef :: IORef [TestResult]
+    , referenceInputResultsRef :: IORef [TestResult]
+    , mintingResultsRef :: IORef [TestResult]
     , efficiencyResultsRef :: IORef [TestResult]
     , stakingResultsRef :: IORef [TestResult]
     , governanceBenchmarkResultsRef :: IORef [TestResult]
@@ -76,8 +79,8 @@ stakingTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         , run $ verifyMultipleStakePoolRetireTestInfo stakePools
         ]
 
-pv9Tests :: IORef [TestResult] -> H.Property
-pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
+plutusV3Tests :: IORef [TestResult] -> H.Property
+plutusV3Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
     let options = TN.testnetOptionsConway9
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
         TN.setupTestEnvironment options tempAbsPath
@@ -92,15 +95,46 @@ pv9Tests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         , run verifyEcdsaSignatureForUtxoUnlockingTestInfo
         , run verifyEd25519SignatureForUtxoUnlockingTestInfo
         , run verifyBlake2b224ForValidatingPubKeyHashTestInfo
-        , run verifyReferenceInputVisibilityTestInfo
-        , run verifyMaxExUnitsMintingTestInfo
-        , run verifyLockingAndSpendingInSameScriptTestInfo
-        , run verifyLockingAndSpendingInDifferentScriptTestInfo
-        , run verifyMultiSigRequirementTestInfo
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
     U.anyLeftFail_ $ TN.cleanupTestnet mPoolNodes
+
+spendingTests :: IORef [TestResult] -> H.Property
+spendingTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
+    let options = TN.testnetOptionsConway9
+    (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
+        TN.setupTestEnvironment options tempAbsPath
+    preTestnetTime <- liftIO Time.getCurrentTime
+    let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
+        run testInfo = runTest testInfo resultsRef options testParams
+    sequence_
+        [ run verifyLockingAndSpendingInSameScriptTestInfo
+        , run verifyLockingAndSpendingInDifferentScriptTestInfo
+        , run verifyMultiSigRequirementTestInfo
+        ]
+
+mintingTests :: IORef [TestResult] -> H.Property
+mintingTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
+    let options = TN.testnetOptionsConway9
+    (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
+        TN.setupTestEnvironment options tempAbsPath
+    preTestnetTime <- liftIO Time.getCurrentTime
+    let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
+        run testInfo = runTest testInfo resultsRef options testParams
+    sequence_
+        [run verifyMaxExUnitsMintingTestInfo]
+
+referenceInputTests :: IORef [TestResult] -> H.Property
+referenceInputTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
+    let options = TN.testnetOptionsConway9
+    (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
+        TN.setupTestEnvironment options tempAbsPath
+    preTestnetTime <- liftIO Time.getCurrentTime
+    let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
+        run testInfo = runTest testInfo resultsRef options testParams
+    sequence_
+        [run verifyReferenceInputVisibilityTestInfo]
 
 pv9GovernanceBenchmark :: IORef [TestResult] -> H.Property
 pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
@@ -130,7 +164,10 @@ tests :: ResultsRefs -> TestTree
 tests ResultsRefs{..} =
     testGroup
         "Plutus E2E Tests"
-        [ testProperty "Conway PV9 Tests" (pv9Tests pv9ResultsRef)
+        [ testProperty "Plutus V3 Tests" (plutusV3Tests plutusV3ResultsRef)
+        , testProperty "Spending V3 Script Tests" (spendingTests spendingResultsRef)
+        , testProperty "Reference Input Tests" (referenceInputTests referenceInputResultsRef)
+        , testProperty "Minting Tests" (mintingTests mintingResultsRef)
         , testProperty "PlutusV3 Efficiency Tests" (efficiencyTests efficiencyResultsRef)
         , testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
         , testProperty "Governance Actions Benchmark Tests" (pv9GovernanceBenchmark governanceBenchmarkResultsRef)
@@ -139,13 +176,20 @@ tests ResultsRefs{..} =
 runTestsWithResults :: IO ()
 runTestsWithResults = do
     createDirectoryIfMissing False "test-report-xml"
-    allRefs@[pv9ResultsRef, efficiencyResultsRef, stakingResultsRef, governanceBenchmarkResultsRef] <-
-        traverse newIORef $ replicate 4 []
+    allRefs@[plutusV3ResultsRef, spendingResultsRef, referenceInputResultsRef, mintingResultsRef, efficiencyResultsRef, stakingResultsRef, governanceBenchmarkResultsRef] <-
+        traverse newIORef $ replicate 7 []
     eException <-
         try
             ( defaultMain $
                 tests $
-                    ResultsRefs pv9ResultsRef efficiencyResultsRef stakingResultsRef governanceBenchmarkResultsRef
+                    ResultsRefs
+                        plutusV3ResultsRef
+                        spendingResultsRef
+                        referenceInputResultsRef
+                        mintingResultsRef
+                        efficiencyResultsRef
+                        stakingResultsRef
+                        governanceBenchmarkResultsRef
             ) ::
             IO (Either ExitCode ())
     [pv9Results, efficiencyResults, stakingReults, governanceBenchmarkResults] <- traverse readIORef allRefs
