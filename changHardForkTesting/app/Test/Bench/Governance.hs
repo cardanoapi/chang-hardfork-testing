@@ -8,11 +8,15 @@ module Test.Bench.Governance where
 
 import Cardano.Api qualified as C
 
+import Cardano.Api.Ledger qualified as C
 import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson.KeyMap (mapMaybe)
-import Data.Maybe (catMaybes)
+import Data.Map qualified as Map
+import Data.Maybe (catMaybes, fromJust)
+import Data.Text qualified as Text
 import Debug.Trace qualified as Debug
+import GHC.Real ((%))
 import Hedgehog hiding (test)
 import Hedgehog qualified as H
 import Helpers.Committee
@@ -435,3 +439,54 @@ delegateSelectedAdaHolderToStakePool
                 ++ " ada holders"
             )
         return Nothing
+
+-- constitutionProposalAndVoteTestInfo committee dReps shelleyWallets =
+--     TestInfo
+--         { testName = "constitutionProposalAndVote"
+--         , testDescription = "Constitution Proposal and Vote"
+--         , test = constitutionProposalAndVote committee dReps shelleyWallets
+--         }
+
+-- constitutionProposalAndVote
+--     :: (MonadTest m, MonadIO m) =>
+--     [Committee era]
+--     -> [DRep era]
+--     -> [ShelleyWallet era]
+--     -> TN.TestEnvironmentOptions era
+--     -> TestParams era
+--     -> m (Maybe String)
+-- constitutionProposalAndVote
+--     committee
+--     dReps
+--     shelleyWallets
+--     networkOptions
+--     TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+--         era <- TN.eraFromOptionsM networkOptions
+--         skeyAndAddress <- TN.w tempAbsPath networkId
+--         let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+--             sbe = toShelleyBasedEra era
+--             ceo = toConwayEraOnwards era
+--         currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+--         H.annotate $ show currentEpoch1
+--         currentEpoch2 <-
+--             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+--                 =<< Q.getCurrentEpoch era localNodeConnectInfo
+--         H.annotate $ show currentEpoch2
+--         let anchorUrl = (\t -> C.textToUrl (Text.length t) t) "https://example.com/committee.txt"
+--             anchor = C.createAnchor (fromJust anchorUrl) "new committee"
+--         tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+--         let
+--             tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+--             tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+--             newConstitutionalCommittee = Map.singleton committeeColdKeyHash (currentEpoch2 + 1)
+--             prevConstitutionalCommittee = []
+--             quorum = 1 % 1
+--             proposal =
+--                 C.createProposalProcedure
+--                 sbe
+--                 (C.toShelleyNetwork networkId)
+--                 0 -- govActionDeposit
+--                 (sPStakeKeyHash stakeDelegationPool)
+--                 (C.ProposeNewCommittee C.SNothing prevConstitutionalCommittee newConstitutionalCommittee quorum)
+--                 anchor
+--         err

@@ -117,8 +117,8 @@ pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbs
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
         [ -- commenting this one out for now, because it takes a lot of time
-          run $ fundShelleyWalletsTestInfo shelleyWallets
-        , run $ registerShelleyWalletsTestInfo shelleyWallets
+          --   run $ fundShelleyWalletsTestInfo shelleyWallets
+          run $ registerShelleyWalletsTestInfo shelleyWallets
         , run $ registerDrepsInfo dReps
         , run $ registerCCMembersInfo ccMembers
         , run $ verifyMultipleStakePoolRegistrationTestInfo stakePools
@@ -130,10 +130,10 @@ tests :: ResultsRefs -> TestTree
 tests ResultsRefs{..} =
     testGroup
         "Plutus E2E Tests"
-        [ --   testProperty "Conway PV9 Tests" (pv9Tests pv9ResultsRef)
-          -- , testProperty "PlutusV3 Efficiency Tests" (efficiencyTests efficiencyResultsRef)
-          -- , testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
-          testProperty "Governance Actions Benchmark Tests" (pv9GovernanceBenchmark governanceBenchmarkResultsRef)
+        [ testProperty "Conway PV9 Tests" (pv9Tests pv9ResultsRef)
+        , testProperty "PlutusV3 Efficiency Tests" (efficiencyTests efficiencyResultsRef)
+        , testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
+        , testProperty "Governance Actions Benchmark Tests" (pv9GovernanceBenchmark governanceBenchmarkResultsRef)
         ]
 
 runTestsWithResults :: IO ()
