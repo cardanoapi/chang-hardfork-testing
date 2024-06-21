@@ -70,6 +70,7 @@ executable changHardForkTesting
     Helpers.Error
     Helpers.PlutusScripts
     Helpers.Query
+    Helpers.Rational
     Helpers.ScriptUtils
     Helpers.StakePool
     Helpers.Staking
@@ -117,6 +118,7 @@ executable changHardForkTesting
     , cardano-crypto-class
     , cardano-data
     , cardano-ledger-alonzo
+    , cardano-ledger-api
     , cardano-ledger-babbage
     , cardano-ledger-byron
     , cardano-ledger-conway
@@ -125,6 +127,7 @@ executable changHardForkTesting
     , cardano-testnet
     , cborg
     , containers
+    , data-default-class
     , deepseq
     , directory
     , filepath
@@ -133,6 +136,7 @@ executable changHardForkTesting
     , hedgehog-extras
     , lens
     , lucid
+    , mtl
     , ouroboros-network-protocols
     , plutus-core
     , plutus-ledger-api

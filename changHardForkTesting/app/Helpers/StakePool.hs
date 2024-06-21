@@ -5,6 +5,7 @@ module Helpers.StakePool where
 
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger qualified as C
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C hiding (Voter)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Ratio ((%))
@@ -44,7 +45,7 @@ generateStakePoolKeyCredentialsAndCertificate ceo networkId = do
             C.StakePoolParameters
                 { C.stakePoolId = stakePoolKeyHash
                 , C.stakePoolVRF = stakePoolVrfKeyHash
-                , C.stakePoolCost = C.Lovelace 0
+                , C.stakePoolCost = L.Coin 0
                 , C.stakePoolMargin = 0 % 1
                 , C.stakePoolRewardAccount = rewardAccountAddr
                 , C.stakePoolPledge = 0

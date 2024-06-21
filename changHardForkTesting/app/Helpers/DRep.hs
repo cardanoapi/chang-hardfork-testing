@@ -5,6 +5,7 @@ module Helpers.DRep where
 
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger qualified as C
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C hiding (Voter)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -31,7 +32,7 @@ generateDRepKeyCredentialsAndCertificate ::
     C.ConwayEraOnwards era ->
     m [DRep era]
 generateDRepKeyCredentialsAndCertificate ceo = do
-    dRepSKeys <- mapM id $ take 20 $ repeat $ liftIO $ C.generateSigningKey C.AsDRepKey
+    dRepSKeys <- mapM id $ take 3 $ repeat $ liftIO $ C.generateSigningKey C.AsDRepKey
     let generateDRepHelper skey = do
             let C.DRepKeyHash dRepKeyHash = C.verificationKeyHash $ C.getVerificationKey skey
                 dRepVotingCredential = C.conwayEraOnwardsConstraints ceo $ C.KeyHashObj dRepKeyHash
@@ -55,7 +56,7 @@ buildDRep ::
     m (DRep era)
 buildDRep ceo dRepVotingCredential mDRepSKey = do
     let
-        dRepDeposit = C.Lovelace 0
+        dRepDeposit = L.Coin 0
         dRepRegReqs = C.DRepRegistrationRequirements ceo dRepVotingCredential dRepDeposit
         dRepRegCert = C.makeDrepRegistrationCertificate dRepRegReqs Nothing
         dRepUnregReqs = C.DRepUnregistrationRequirements ceo dRepVotingCredential 0

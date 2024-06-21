@@ -8,6 +8,7 @@
 
 module V3.Spend.VerifyBLS12G2 where
 
+import GHC.ByteOrder (ByteOrder (LittleEndian))
 import PlutusLedgerApi.V3
 import PlutusTx qualified
 import PlutusTx.Builtins
@@ -55,7 +56,7 @@ mkValidator dat red ctx =
     datumSum =
         datumPoint1 `bls12_381_G2_add` datumPoint2
     datumProduct =
-        (byteStringToInteger False (compress datumPoint1)) `bls12_381_G2_scalarMul` datumPoint2
+        (byteStringToInteger (LittleEndian) (compress datumPoint1)) `bls12_381_G2_scalarMul` datumPoint2
     datumNegativePoint1 = bls12_381_G2_neg datumPoint1
     datumNegativePoint2 = bls12_381_G2_neg datumPoint2
 

@@ -25,7 +25,7 @@ import Helpers.Test (assert)
 import Helpers.TestData (TestInfo (..), TestParams (..))
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
-import Helpers.TypeConverters (fromCardanoTxIn, toPlutusAddress)
+import Helpers.TypeConverters (fromCardanoTxInV1, fromCardanoTxInV3, toPlutusAddress)
 import Helpers.Utils qualified as U
 import PlutusLedgerApi.V1.Interval qualified as P
 import PlutusLedgerApi.V1.Time qualified as P
@@ -59,8 +59,8 @@ verifyV3MintingEfficiencyTest networkOptions TestParams{localNodeConnectInfo, pp
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     txInAsTxOut@(C.TxOut _ txInValue _ _) <-
         Q.getTxOutAtAddress era localNodeConnectInfo w1Address txIn "txInAsTxOut <- getTxOutAtAddress"
-    let v3ScriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
-        v2ScriptValidator = V2.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
+    let v3ScriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxInV3 txIn)
+        v2ScriptValidator = V2.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxInV1 txIn)
         verifyMaxExUnitsMintingInfoV3 = v3ScriptInfo networkId v3ScriptValidator
         verifyMaxExUnitsMintingInfoV2 = v2ScriptInfo networkId v2ScriptValidator
         v3PolicyId = C.PolicyId $ v3hash verifyMaxExUnitsMintingInfoV3
@@ -303,17 +303,17 @@ verifyV3TxInfoFieldsTest networkOptions TestParams{localNodeConnectInfo, pparams
                     U.posixToMilliseconds startTime + 900_000
         v3Fields =
             V3.Spend.TxInfoFields.TxInfoFields
-                (fromCardanoTxIn input)
+                (fromCardanoTxInV3 input)
                 outputAddress
-                (fromCardanoTxIn refTxIn)
+                (fromCardanoTxInV3 refTxIn)
                 signers
                 before
                 after
         v2Fields =
             V2.Spend.TxInfoFields.TxInfoFields
-                (fromCardanoTxIn input)
+                (fromCardanoTxInV1 input)
                 outputAddress
-                (fromCardanoTxIn refTxIn)
+                (fromCardanoTxInV1 refTxIn)
                 signers
                 before
                 after
@@ -351,8 +351,8 @@ verifyV3TxInfoFieldsTest networkOptions TestParams{localNodeConnectInfo, pparams
     Helpers.Test.assert "V3 Script has been funded" v3txOutHasValue
     Helpers.Test.assert "V2 Script has been funded" v2txOutHasValue
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w3Address
-    let v3ScriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
-        v2ScriptValidator = V2.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
+    let v3ScriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxInV3 txIn)
+        v2ScriptValidator = V2.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxInV1 txIn)
         verifyMaxExUnitsMintingInfoV3 = v3ScriptInfo networkId v3ScriptValidator
         verifyMaxExUnitsMintingInfoV2 = v2ScriptInfo networkId v2ScriptValidator
         v3PolicyId = C.PolicyId $ v3hash verifyMaxExUnitsMintingInfoV3

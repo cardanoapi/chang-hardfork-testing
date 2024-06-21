@@ -7,6 +7,7 @@
 module Test.V3.PlutusTests where
 
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley
 import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -20,7 +21,7 @@ import Helpers.Test (assert)
 import Helpers.TestData (TestInfo (..), TestParams (..))
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
-import Helpers.TypeConverters (fromCardanoTxIn, toPlutusAddress, toPlutusValue)
+import Helpers.TypeConverters (fromCardanoTxInV1, fromCardanoTxInV3, toPlutusAddress, toPlutusValue)
 import Test.V3.DummyDataTypes
 import Utils
 import V2.Mint.VerifyMintingMaxExUnits qualified
@@ -643,8 +644,8 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
     txIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
     txInAsTxOut@(C.TxOut _ txInValue _ _) <-
         Q.getTxOutAtAddress era localNodeConnectInfo w1Address txIn "txInAsTxOut <- getTxOutAtAddress"
-    let v3ScriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
-        v2ScriptValidator = V2.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxIn txIn)
+    let v3ScriptValidator = V3.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxInV3 txIn)
+        v2ScriptValidator = V2.Mint.VerifyMintingMaxExUnits.validator (fromCardanoTxInV1 txIn)
         verifyMaxExUnitsMintingInfoV3 = v3ScriptInfo networkId v3ScriptValidator
         verifyMaxExUnitsMintingInfoV2 = v2ScriptInfo networkId v2ScriptValidator
         policyId = C.PolicyId $ v3hash verifyMaxExUnitsMintingInfoV3
@@ -653,7 +654,7 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
         collateral = Tx.txInsCollateral era [txIn]
         totalLovelace = C.txOutValueToLovelace txInValue
         amountPaid = 4_000_000
-        fee = 2_500_000 :: C.Lovelace
+        fee = 2_500_000 :: L.Coin
         amountReturned = totalLovelace - amountPaid - fee
         maxExecutionUnits =
             C.ExecutionUnits

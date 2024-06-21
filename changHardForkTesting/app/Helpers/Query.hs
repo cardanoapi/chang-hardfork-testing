@@ -22,6 +22,7 @@ import Data.List (isInfixOf, sortBy)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Data.Set qualified as Set
+import Debug.Trace qualified as Debug
 import Hedgehog (MonadTest)
 import Hedgehog.Extras.Test qualified as HE
 import Hedgehog.Extras.Test.Base qualified as H
@@ -108,7 +109,7 @@ getAddressTxInsLovelaceValue ::
     C.CardanoEra era ->
     C.LocalNodeConnectInfo ->
     C.Address a ->
-    m ([C.TxIn], C.Lovelace)
+    m ([C.TxIn], L.Coin)
 getAddressTxInsLovelaceValue era con address = do
     utxo <- findUTxOByAddress era con address
     let (txIns, txOuts) = unzip $ Map.toList $ C.unUTxO utxo
@@ -263,7 +264,7 @@ waitForNextEpoch era localNodeConnectInfo debugStr prevEpochNo = go (300 :: Int)
     go 0 = error $ "waitForNextEpoch timeout. \n-- Debug --\nTest function: " ++ debugStr
     go i = do
         currentEpochNo <- getCurrentEpoch era localNodeConnectInfo
-        case currentEpochNo - prevEpochNo of
+        case (toInteger $ C.unEpochNo currentEpochNo) - (toInteger $ C.unEpochNo prevEpochNo) of
             0 -> do
                 liftIO $ threadDelay 1000000 -- 1s
                 go (pred i)
@@ -286,7 +287,7 @@ getConstitution ::
     (MonadIO m, MonadTest m) =>
     C.CardanoEra era ->
     C.LocalNodeConnectInfo ->
-    m (Maybe (C.Constitution (C.ShelleyLedgerEra era)))
+    m (C.Constitution (C.ShelleyLedgerEra era))
 getConstitution era localNodeConnectInfo =
     H.leftFailM
         . H.leftFailM
@@ -300,27 +301,27 @@ getConstitutionAnchor ::
     C.CardanoEra era ->
     C.LocalNodeConnectInfo ->
     m (C.Anchor (L.EraCrypto (C.ShelleyLedgerEra era)))
-getConstitutionAnchor era localNodeConnectInfo =
-    C.constitutionAnchor . fromJust <$> getConstitution era localNodeConnectInfo
+getConstitutionAnchor era localNodeConnectInfo = do
+    constitution <- getConstitution era localNodeConnectInfo
+    pure $ C.constitutionAnchor constitution
 
 getConstitutionAnchorUrl ::
     (MonadIO m, MonadTest m) =>
     C.CardanoEra era ->
     C.LocalNodeConnectInfo ->
     m L.Url
-getConstitutionAnchorUrl era localNodeConnectInfo =
-    C.anchorUrl . C.constitutionAnchor . fromJust <$> getConstitution era localNodeConnectInfo
+getConstitutionAnchorUrl era localNodeConnectInfo = do
+    constitution <- getConstitution era localNodeConnectInfo
+    pure $ C.anchorUrl (C.constitutionAnchor constitution)
 
 getConstitutionAnchorHash ::
     (MonadIO m, MonadTest m) =>
     C.CardanoEra era ->
     C.LocalNodeConnectInfo ->
     m (C.SafeHash (L.EraCrypto (C.ShelleyLedgerEra era)) C.AnchorData)
-getConstitutionAnchorHash era localNodeConnectInfo =
-    C.anchorDataHash
-        . C.constitutionAnchor
-        . fromJust
-        <$> getConstitution era localNodeConnectInfo
+getConstitutionAnchorHash era localNodeConnectInfo = do
+    constitution <- getConstitution era localNodeConnectInfo
+    pure $ C.anchorDataHash (C.constitutionAnchor constitution)
 
 getConstitutionAnchorHashAsString ::
     (MonadIO m, MonadTest m) =>
@@ -329,3 +330,19 @@ getConstitutionAnchorHashAsString ::
     m String
 getConstitutionAnchorHashAsString era localNodeConnectInfo =
     show . L.extractHash <$> getConstitutionAnchorHash era localNodeConnectInfo
+
+getConwayGovernanceState localNodeConnectInfo =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra (C.ShelleyBasedEraConway) C.QueryGovState
+
+getGovStateInAnyEra era localNodeConnectInfo =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra era C.QueryGovState

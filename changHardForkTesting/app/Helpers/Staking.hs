@@ -5,6 +5,7 @@ module Helpers.Staking where
 
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger qualified as C
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.List (zipWith4)
@@ -28,7 +29,7 @@ generateStakeKeyCredentialAndCertificate ceo stakePool = do
     stakeSKeys <- mapM id $ take 3 $ repeat $ liftIO $ C.generateSigningKey C.AsStakeKey
     let
         stakeCreds = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
-        stakeDeposit = C.Lovelace 0 -- keyDeposit
+        stakeDeposit = L.Coin 0 -- keyDeposit
         stakeReqs = map (\x -> C.StakeAddrRegistrationConway ceo stakeDeposit x) stakeCreds
         stakeRegCerts = map C.makeStakeAddressRegistrationCertificate stakeReqs
         stakeUnregCerts = map C.makeStakeAddressUnregistrationCertificate stakeReqs

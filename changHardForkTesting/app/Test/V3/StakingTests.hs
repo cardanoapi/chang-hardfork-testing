@@ -19,6 +19,7 @@ import Helpers.Staking
 import Helpers.TestData (TestInfo (..), TestParams (..))
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
+import Helpers.Utils (addEpoch)
 
 -- mutiple stake address registration
 verifyMultipleStakeAddressRegistrationTestInfo :: [Staking era] -> TestInfo era
@@ -368,9 +369,9 @@ verifyMultipleStakePoolRetireTest
         let stakePool1 = stakePool !! 0
             stakePool2 = stakePool !! 1
             stakePool3 = stakePool !! 2
-            retireSPCert1 = makeStakePoolRetireCertification ceo stakePool1 (currentEpoch + 1)
-            retireSPCert2 = makeStakePoolRetireCertification ceo stakePool2 (currentEpoch + 1)
-            retireSPCert3 = makeStakePoolRetireCertification ceo stakePool3 (currentEpoch + 1)
+            retireSPCert1 = makeStakePoolRetireCertification ceo stakePool1 (currentEpoch `addEpoch` 1)
+            retireSPCert2 = makeStakePoolRetireCertification ceo stakePool2 (currentEpoch `addEpoch` 1)
+            retireSPCert3 = makeStakePoolRetireCertification ceo stakePool3 (currentEpoch `addEpoch` 1)
             spRetireTxOut = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
             stakeDelegTxBodyContent =
                 (Tx.emptyTxBodyContent sbe pparams)

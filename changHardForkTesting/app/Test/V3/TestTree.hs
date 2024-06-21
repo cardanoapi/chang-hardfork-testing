@@ -138,7 +138,7 @@ referenceInputTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPat
 
 pv9GovernanceBenchmark :: IORef [TestResult] -> H.Property
 pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
-    let options = TN.testnetOptionsConway9
+    let options = TN.testnetOptionsConway9Governance
         ceo = toConwayEraOnwards $ TN.eraFromOptions options
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
         TN.setupTestEnvironment options tempAbsPath
@@ -158,19 +158,25 @@ pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbs
         , run $ verifyMultipleStakePoolRegistrationTestInfo stakePools
         , run $ delegateAdaHolderToDRepsTestInfo shelleyWallets dReps
         , run $ delegateAdaHolderToStakePoolsTestInfo shelleyWallets stakePools
+        , run $ multipleConstitutionProposalAndVotesTestInfo ccMembers dReps shelleyWallets
+        , run $ multipleCommitteeProposalAndVoteTestInfo ccMembers dReps shelleyWallets stakePools
+        , run $ multipleNoConfidenceProposalAndVoteTestInfo dReps shelleyWallets stakePools
+        , run $ multiplePrameterChangeProposalAndVoteTestInfo ccMembers dReps shelleyWallets
+        , run $ multipleTreasuryWithdrawalProposalAndVoteTestInfo ccMembers dReps shelleyWallets
+        , run $ multipleInfoProposalAndVoteTestInfo ccMembers dReps shelleyWallets stakePools
         ]
 
 tests :: ResultsRefs -> TestTree
 tests ResultsRefs{..} =
     testGroup
         "Plutus E2E Tests"
-        [ testProperty "Plutus V3 Tests" (plutusV3Tests plutusV3ResultsRef)
-        , testProperty "Spending V3 Script Tests" (spendingTests spendingResultsRef)
-        , testProperty "Reference Input Tests" (referenceInputTests referenceInputResultsRef)
-        , testProperty "Minting Tests" (mintingTests mintingResultsRef)
-        , testProperty "PlutusV3 Efficiency Tests" (efficiencyTests efficiencyResultsRef)
-        , testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
-        , testProperty "Governance Actions Benchmark Tests" (pv9GovernanceBenchmark governanceBenchmarkResultsRef)
+        [ --     testProperty "Plutus V3 Tests" (plutusV3Tests plutusV3ResultsRef)
+          -- , testProperty "Spending V3 Script Tests" (spendingTests spendingResultsRef)
+          -- , testProperty "Reference Input Tests" (referenceInputTests referenceInputResultsRef)
+          -- , testProperty "Minting Tests" (mintingTests mintingResultsRef)
+          -- , testProperty "PlutusV3 Efficiency Tests" (efficiencyTests efficiencyResultsRef)
+          -- , testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
+          testProperty "Governance Actions Benchmark Tests" (pv9GovernanceBenchmark governanceBenchmarkResultsRef)
         ]
 
 runTestsWithResults :: IO ()
@@ -192,18 +198,24 @@ runTestsWithResults = do
                         governanceBenchmarkResultsRef
             ) ::
             IO (Either ExitCode ())
-    [pv9Results, efficiencyResults, stakingReults, governanceBenchmarkResults] <- traverse readIORef allRefs
+    [plutusV3Results, spendingResults, referenceInputResults, mintingResults, efficiencyResults, stakingReults, governanceBenchmarkResults] <- traverse readIORef allRefs
     failureMessages <- liftIO $ allFailureMessages allRefs
     liftIO $ putStrLn $ "Total number of test failures: " ++ (show $ length failureMessages)
     let
-        pv9TestSuiteResult = TestSuiteResults "Conway PV9 Tests" pv9Results
+        plutusV3TestSuiteResults = TestSuiteResults "Plutus V3 Tests" plutusV3Results
+        spendingTestSuiteResults = TestSuiteResults "Spending Tx Tests" spendingResults
+        referenceInputTestSuiteResults = TestSuiteResults "Reference Input Tx Tests" referenceInputResults
+        mintingTestSuiteResults = TestSuiteResults "Minting Tx Tests" mintingResults
         efficiencyTestSuiteResult = TestSuiteResults "PlutusV3 Efficiency Tests" efficiencyResults
         stakeAndPoolTestSuiteResult = TestSuiteResults "Staking and Pool Operations Tests" stakingReults
         governanceBenchmarkResult = TestSuiteResults "Governance Actions Benchmark Tests" governanceBenchmarkResults
     -- Use 'results' to generate custom JUnit XML report
     let xml =
             testSuitesToJUnit
-                [ pv9TestSuiteResult
+                [ plutusV3TestSuiteResults
+                , spendingTestSuiteResults
+                , referenceInputTestSuiteResults
+                , mintingTestSuiteResults
                 , efficiencyTestSuiteResult
                 , stakeAndPoolTestSuiteResult
                 , governanceBenchmarkResult

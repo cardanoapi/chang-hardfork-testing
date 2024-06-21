@@ -13,8 +13,8 @@ repository cardano-haskell-packages
 
 -- See CONTRIBUTING.adoc for how to update index-state
 index-state:
-  , hackage.haskell.org 2024-02-06T15:14:50Z
-  , cardano-haskell-packages 2024-02-07T07:51:35Z
+  , hackage.haskell.org 2024-05-30T17:32:42Z
+  , cardano-haskell-packages 2024-06-04T19:25:39Z
 packages: changHardForkTesting
 
 -- We never, ever, want this.
@@ -48,31 +48,14 @@ constraints:
   -- See https://github.com/input-output-hk/haskell.nix/issues/2042
   concurrent-output < 1.10.19
 
--- Fork for improvements to cardano-testnet (awaiting upstream merge)
--- including PlutusV3 cost model
-source-repository-package
-    type: git
-    location: https://github.com/james-iohk/cardano-node
-    tag: a8f5895303b1adf7c553997d9982b11b26427124
-    subdir:
-      cardano-testnet
-    --sha256: sha256-Kw5VIzvvE8UlQC9blRWQhu+fHqFS3HEhXmN291Yy14E=
-
 source-repository-package
     type: git
     location: https://github.com/IntersectMBO/cardano-node
-    tag: 4bb2048db77d623ee6e3678618c2d8b6c4676333
+    tag: 235e34f6df9a1490190f6247b610b4e114ca3b96
     subdir:
       cardano-node
+      cardano-testnet
       trace-dispatcher
       trace-forward
       trace-resources
-    --sha256: sha256-pWXI8dyqKQ3HncbBtd54wdHi3Pj7J5y+nybqpzMXOj4=
-
-source-repository-package
-    type: git
-    location: https://github.com/IntersectMBO/cardano-api.git
-    tag: 0fa74a6b488ed1fed5f3865780051dd6324a3ff1
-    subdir: cardano-api
-    --sha256: sha256-WgQ5W5kdfvEUvBWS4YrvZT1C3rzDOQqQIvjDx2sAOB4=
-  
+    --sha256: sha256-teLUo4cQ9H52EkmJ9uXOIuyI78DtrKWxflJm+BnBqlM=

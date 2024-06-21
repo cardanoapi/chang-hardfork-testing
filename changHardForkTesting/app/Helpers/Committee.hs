@@ -5,9 +5,12 @@ module Helpers.Committee where
 
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger qualified as C
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C hiding (Voter)
+import Cardano.Crypto.Hash.Class qualified
 import Cardano.Ledger.Keys qualified as Keys
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Maybe (fromJust)
 
 data Committee era = Committee
     { committeeColdSKey :: C.SigningKey C.CommitteeColdKey
@@ -36,10 +39,9 @@ generateCommitteeKeysAndCertificate ceo = do
 
                 _committeeHotVerificationKey@(C.CommitteeHotVerificationKey committeeHotVKey) =
                     C.getVerificationKey hotSKey
-
                 -- Produce committee hot key authorization certificate
-                ckh = C.conwayEraOnwardsConstraints ceo $ Keys.hashKey committeeColdVkey
-                hkh = C.conwayEraOnwardsConstraints ceo $ Keys.hashKey committeeHotVKey
+                ckh = C.conwayEraOnwardsConstraints ceo $ L.KeyHashObj $ Keys.hashKey committeeColdVkey
+                hkh = C.conwayEraOnwardsConstraints ceo $ L.KeyHashObj $ Keys.hashKey committeeHotVKey
                 committeeHotRequirements = C.CommitteeHotKeyAuthorizationRequirements ceo ckh hkh
                 committeeHotKeyAuthCert = C.makeCommitteeHotKeyAuthorizationCertificate committeeHotRequirements
 

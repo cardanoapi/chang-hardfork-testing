@@ -11,14 +11,37 @@
 
 module Helpers.Testnet where
 
+import Cardano.Api (ConwayEraOnwards)
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger (
+    Coin (Coin),
+    Credential (KeyHashObj),
+    EpochInterval (..),
+    EraCrypto,
+    KeyHash,
+    KeyRole (StakePool),
+    StandardCrypto,
+    Voter (StakePoolVoter),
+ )
 import Cardano.Api.Shelley qualified as C
+import Cardano.Ledger.Conway.Genesis
+import Cardano.Ledger.Conway.PParams
+import Cardano.Testnet (Conf (tempAbsPath))
+import Cardano.Testnet qualified as CTN
+import Control.Lens ((&), (.~))
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Identity (Identity)
+import Data.ByteString.Char8 qualified as BS8
+import Data.Default.Class qualified as DefaultClass
 import Data.Maybe (fromJust)
+import Data.Time.Clock.POSIX qualified as Time
+import Debug.Trace qualified as Debug
 import Hedgehog (MonadTest)
+import Hedgehog qualified as H
 import Hedgehog.Extras.Stock (waitSecondsForProcess)
 import Hedgehog.Extras.Stock.IO.Network.Sprocket qualified as IO
+import Hedgehog.Extras.Test qualified as H
 import Hedgehog.Extras.Test qualified as HE
 import Hedgehog.Extras.Test.Base qualified as H
 import Helpers.Common (
@@ -28,31 +51,15 @@ import Helpers.Common (
     toMaryEraOnwards,
     toShelleyBasedEra,
  )
+import Helpers.Error (TimedOut (ProcessExitTimedOut))
+import Helpers.Query qualified as Q
+import Helpers.Rational ((%!))
 import Helpers.Utils (maybeReadAs)
+import Helpers.Utils qualified as U
+import Prettyprinter (Doc)
 import System.Directory qualified as IO
 import System.FilePath ((</>))
 import System.Posix.Signals (sigKILL, signalProcess)
-
-import Cardano.Api (ConwayEraOnwards)
-import Cardano.Api.Ledger (
-    Credential (KeyHashObj),
-    EraCrypto,
-    KeyHash,
-    KeyRole (StakePool),
-    StandardCrypto,
-    Voter (StakePoolVoter),
- )
-import Cardano.Testnet (Conf (tempAbsPath))
-import Cardano.Testnet qualified as CTN
-import Control.Lens ((&), (.~))
-import Data.Time.Clock.POSIX qualified as Time
-import Debug.Trace qualified as Debug
-import Hedgehog qualified as H
-import Hedgehog.Extras.Test qualified as H
-import Helpers.Error (TimedOut (ProcessExitTimedOut))
-import Helpers.Query qualified as Q
-import Helpers.Utils qualified as U
-import Prettyprinter (Doc)
 import System.Process (cleanupProcess)
 import System.Process.Internals (
     PHANDLE,
@@ -61,6 +68,7 @@ import System.Process.Internals (
  )
 import Testnet.Defaults qualified as CTN
 import Testnet.Runtime qualified as CTN
+import Testnet.Types qualified as CTN
 
 data TestEnvironmentOptions era
     = TestnetOptions
@@ -85,8 +93,6 @@ defAlonzoTestnetOptions =
             CTN.cardanoDefaultTestnetOptions
                 { CTN.cardanoNodeEra = C.AnyCardanoEra C.AlonzoEra
                 , CTN.cardanoActiveSlotsCoeff = 0.1
-                , CTN.cardanoSecurityParam = 100
-                , CTN.cardanoProtocolVersion = 6
                 , CTN.cardanoSlotLength = 0.1
                 , CTN.cardanoEpochLength = 10_000 -- higher value so that txs can have higher upper bound validity range
                 }
@@ -101,8 +107,6 @@ defBabbageTestnetOptions protocolVersion =
             CTN.cardanoDefaultTestnetOptions
                 { CTN.cardanoNodeEra = C.AnyCardanoEra C.BabbageEra
                 , CTN.cardanoActiveSlotsCoeff = 0.1
-                , CTN.cardanoSecurityParam = 100
-                , CTN.cardanoProtocolVersion = protocolVersion
                 , CTN.cardanoSlotLength = 0.1
                 , CTN.cardanoEpochLength = 10_000 -- higher value so that txs can have higher upper bound validity range
                 }
@@ -117,8 +121,6 @@ defConwayTestnetOptions =
             CTN.cardanoDefaultTestnetOptions
                 { CTN.cardanoNodeEra = C.AnyCardanoEra C.ConwayEra
                 , CTN.cardanoActiveSlotsCoeff = 0.1
-                , CTN.cardanoSecurityParam = 100
-                , CTN.cardanoProtocolVersion = 9
                 , CTN.cardanoSlotLength = 0.1
                 , CTN.cardanoEpochLength = 10_000 -- higher value so that txs can have higher upper bound validity range
                 }
@@ -133,7 +135,6 @@ shortEpochConwayTestnetOptions =
                 -- 200 second epoch for testing outcome of governance actions (shorter is unstable)
                 , CTN.cardanoEpochLength = 2_000
                 , CTN.cardanoSlotLength = 0.1
-                , CTN.cardanoSecurityParam = 20 -- adjusted from default due to short epoch length
                 }
         }
 

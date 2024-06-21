@@ -36,8 +36,11 @@ fromCardanoScriptData = PV1.dataToBuiltinData . C.toPlutusData . C.getScriptData
 fromCardanoScriptHash :: C.ScriptHash -> PV1.ScriptHash
 fromCardanoScriptHash scriptHash = PV1.ScriptHash $ PlutusTx.toBuiltin $ C.serialiseToRawBytes scriptHash
 
-fromCardanoTxIn :: C.TxIn -> PV3.TxOutRef
-fromCardanoTxIn (C.TxIn txId (C.TxIx txIx)) = PV3.TxOutRef (fromCardanoTxId txId) (toInteger txIx)
+fromCardanoTxInV3 :: C.TxIn -> PV3.TxOutRef
+fromCardanoTxInV3 (C.TxIn txId (C.TxIx txIx)) = PV3.TxOutRef (fromCardanoTxIdV3 txId) (toInteger txIx)
+
+fromCardanoTxInV1 :: C.TxIn -> PV1.TxOutRef
+fromCardanoTxInV1 (C.TxIn txId (C.TxIx txIx)) = PV1.TxOutRef (fromCardanoTxIdV1 txId) (toInteger txIx)
 
 cardanoAddressCredential :: C.AddressInEra era -> Credential
 cardanoAddressCredential (C.AddressInEra C.ByronAddressInAnyEra (C.ByronAddress address)) =
@@ -173,8 +176,11 @@ refScriptToScriptHash (C.ReferenceScript _ (C.ScriptInAnyLang _ s)) =
     let (PV2.ScriptHash h) = fromCardanoScriptHash $ C.hashScript s
      in Just $ PV2.ScriptHash h
 
-fromCardanoTxId :: C.TxId -> PV1.TxId
-fromCardanoTxId txId = PV1.TxId $ PlutusTx.toBuiltin $ C.serialiseToRawBytes txId
+fromCardanoTxIdV3 :: C.TxId -> PV3.TxId
+fromCardanoTxIdV3 txId = PV3.TxId $ PlutusTx.toBuiltin $ C.serialiseToRawBytes txId
+
+fromCardanoTxIdV1 :: C.TxId -> PV1.TxId
+fromCardanoTxIdV1 txId = PV1.TxId $ PlutusTx.toBuiltin $ C.serialiseToRawBytes txId
 
 fromCardanoPolicyId :: C.PolicyId -> PV1.CurrencySymbol
 fromCardanoPolicyId (C.PolicyId scriptHash) = PV2.CurrencySymbol $ PlutusTx.toBuiltin (C.serialiseToRawBytes scriptHash)
@@ -194,8 +200,8 @@ fromCardanoValue (C.valueToList -> list) =
     fromSingleton (fromCardanoAssetId -> assetClass, C.Quantity quantity) =
         Value.assetClassValue assetClass quantity
 
-fromCardanoLovelace :: C.Lovelace -> PV3.Lovelace
-fromCardanoLovelace (C.Lovelace l) = PV3.Lovelace l
+fromCardanoLovelace :: L.Coin -> PV3.Lovelace
+fromCardanoLovelace (L.Coin l) = PV3.Lovelace l
 
 fromCardanoProposal ::
     -- :: forall era
@@ -208,7 +214,7 @@ fromCardanoProposal sbe (C.Proposal ledgerPP) =
         PV3.ProposalProcedure
             { PV3.ppDeposit =
                 -- fromCardanoValue $ C.lovelaceToValue $ C.fromShelleyLovelace (L.pProcDeposit ledgerPP)
-                fromCardanoLovelace $ C.fromShelleyLovelace (L.pProcDeposit ledgerPP)
+                fromCardanoLovelace $ (L.pProcDeposit ledgerPP)
             , PV3.ppReturnAddr = fromLedgerStakingCredential $ L.getRwdCred $ L.pProcReturnAddr ledgerPP
             , PV3.ppGovernanceAction = fromLedgerGovernanceAction $ L.pProcGovAction ledgerPP
             -- The optional anchor is omitted.

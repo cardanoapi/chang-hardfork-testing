@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -8,28 +9,46 @@ module Test.Bench.Governance where
 
 import Cardano.Api qualified as C
 
-import Cardano.Api.Ledger qualified as C
+import Cardano.Api (queryGovState)
+import Cardano.Api.Ledger (strictMaybeToMaybe)
+import Cardano.Api.Ledger qualified as CL
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C
+import Cardano.Crypto.Hash.Blake2b qualified as Crypto
+import Cardano.Crypto.Hash.Class qualified as Crypto
+import Cardano.Ledger.Conway.Governance qualified (ConwayEraGov (proposalsGovStateL))
+import Cardano.Ledger.Conway.Governance qualified as CG
+import Cardano.Ledger.Conway.PParams qualified as L
+import Cardano.Ledger.Core qualified as L
+import Control.Lens.Getter ((^.))
+import Control.Lens.Setter ((.~))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson.KeyMap (mapMaybe)
+import Data.ByteString qualified as BS
+import Data.Function
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust)
 import Data.Text qualified as Text
 import Debug.Trace qualified as Debug
+import GHC.Conc.IO (threadDelay)
+import GHC.Num
 import GHC.Real ((%))
 import Hedgehog hiding (test)
 import Hedgehog qualified as H
+import Hedgehog.Extras qualified as H
 import Helpers.Committee
+import Helpers.Committee qualified as CC
 import Helpers.Common (makeAddress, toConwayEraOnwards, toShelleyBasedEra)
 import Helpers.DRep
 import Helpers.DRep qualified as DRep
 import Helpers.Query qualified as Q
 import Helpers.StakePool (StakePool (..), makeStakePoolRetireCertification)
 import Helpers.Staking
+import Helpers.Test qualified
 import Helpers.TestData (TestInfo (..), TestParams (..), verifyTxConfirmation)
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
-import Helpers.Utils (getChunk, paymentKeyToAddress, pickRandomElements)
+import Helpers.Utils (GovPurpose (..), addEpoch, getChunk, getPrevGovAction, paymentKeyToAddress, pickRandomElements)
 import Test.Bench.Users
 import Test.Bench.Users qualified as ShelleyWallet
 
@@ -84,7 +103,7 @@ registerSelectedShelleyWallets
         let stakeDelegTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
             stakeSKeys = map (\(ShelleyWallet skey _) -> skey) shelleyWallets
             stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
-            stakeRegistrationRequirements = map (\x -> C.StakeAddrRegistrationConway ceo (C.Lovelace 0) x) stakeCredentials
+            stakeRegistrationRequirements = map (\x -> C.StakeAddrRegistrationConway ceo (L.Coin 0) x) stakeCredentials
             stakeRegCerts = map C.makeStakeAddressRegistrationCertificate stakeRegistrationRequirements
             stakeRegCertsChunk = getChunk 100 chunkIdx stakeRegCerts
             stakeCredentialChunk = getChunk 100 chunkIdx stakeCredentials
@@ -174,7 +193,7 @@ fundSelectedShelleyWallets
                 w1Address
                 [w1SKey]
         Tx.submitTx sbe localNodeConnectInfo signedFundShelleyWallet
-        let expTxIns = map (\x -> Tx.txIn (Tx.txId signedFundShelleyWallet) x) [0 .. 49]
+        let expTxIns = map (\x -> Tx.txIn (Tx.txId signedFundShelleyWallet) x) [0 .. (length shelleyWalletChunk - 1)]
         mapM_ (\(ti, add) -> verifyTxConfirmation era localNodeConnectInfo add ti) (zip expTxIns shelleyWalletChunk)
         Debug.traceM ("Batch No." ++ (show (chunkIdx + 1)) ++ " containing " ++ (show (length txOutToShelleyWallet)) ++ " shelley wallets funded with " ++ (show fundValue))
         return Nothing
@@ -440,53 +459,786 @@ delegateSelectedAdaHolderToStakePool
             )
         return Nothing
 
--- constitutionProposalAndVoteTestInfo committee dReps shelleyWallets =
---     TestInfo
---         { testName = "constitutionProposalAndVote"
---         , testDescription = "Constitution Proposal and Vote"
---         , test = constitutionProposalAndVote committee dReps shelleyWallets
---         }
+multipleConstitutionProposalAndVotesTestInfo committee dReps shelleyWallet =
+    TestInfo
+        { testName = "multipleConstitutionProposalAndVotesTest"
+        , testDescription = "Multiple constitution Proposal and Vote"
+        , test = multipleConstitutionProposalAndVotesTest committee dReps shelleyWallet
+        }
 
--- constitutionProposalAndVote
---     :: (MonadTest m, MonadIO m) =>
---     [Committee era]
---     -> [DRep era]
---     -> [ShelleyWallet era]
---     -> TN.TestEnvironmentOptions era
---     -> TestParams era
---     -> m (Maybe String)
--- constitutionProposalAndVote
---     committee
---     dReps
---     shelleyWallets
---     networkOptions
---     TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
---         era <- TN.eraFromOptionsM networkOptions
---         skeyAndAddress <- TN.w tempAbsPath networkId
---         let (w1SKey, _, w1Address) = skeyAndAddress !! 0
---             sbe = toShelleyBasedEra era
---             ceo = toConwayEraOnwards era
---         currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
---         H.annotate $ show currentEpoch1
---         currentEpoch2 <-
---             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
---                 =<< Q.getCurrentEpoch era localNodeConnectInfo
---         H.annotate $ show currentEpoch2
---         let anchorUrl = (\t -> C.textToUrl (Text.length t) t) "https://example.com/committee.txt"
---             anchor = C.createAnchor (fromJust anchorUrl) "new committee"
---         tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
---         let
---             tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
---             tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
---             newConstitutionalCommittee = Map.singleton committeeColdKeyHash (currentEpoch2 + 1)
---             prevConstitutionalCommittee = []
---             quorum = 1 % 1
---             proposal =
---                 C.createProposalProcedure
---                 sbe
---                 (C.toShelleyNetwork networkId)
---                 0 -- govActionDeposit
---                 (sPStakeKeyHash stakeDelegationPool)
---                 (C.ProposeNewCommittee C.SNothing prevConstitutionalCommittee newConstitutionalCommittee quorum)
---                 anchor
---         err
+multipleConstitutionProposalAndVotesTest ::
+    (MonadTest m, MonadIO m) =>
+    [Committee era] ->
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multipleConstitutionProposalAndVotesTest
+    committee
+    dReps
+    shelleyWallets
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch1
+        currentEpoch2 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch2
+
+        existingConstitutionHash <- Q.getConstitutionAnchorHashAsString era localNodeConnectInfo
+        existingConstitutionHash === "\"0000000000000000000000000000000000000000000000000000000000000000\""
+
+        let constitutionPath = tempAbsPath <> "/constituion.txt"
+        H.writeFile constitutionPath "a new way of life"
+        constituionBS <- H.evalIO $ BS.readFile constitutionPath
+        let
+            constituionHash = show (Crypto.hashWith id constituionBS :: Crypto.Hash Crypto.Blake2b_256 BS.ByteString)
+            constitutionUrl = fromJust $ (\t -> CL.textToUrl (Text.length t) t) "https://example.com/constituion.txt"
+            anchor = C.createAnchor constitutionUrl constituionBS
+        H.annotate constituionHash
+
+        -- build a tx to propose constitution
+        tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+        let
+            tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+            stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+            proposals =
+                map
+                    ( \sp ->
+                        C.createProposalProcedure
+                            sbe
+                            (C.toShelleyNetwork networkId)
+                            0
+                            sp
+                            (C.ProposeNewConstitution CL.SNothing anchor CL.SNothing)
+                            anchor
+                    )
+                    stakeCredentials
+            txProposals =
+                C.shelleyBasedEraConstraints sbe $
+                    Tx.buildTxProposalProcedures (map (\proposal -> (proposal, Nothing)) proposals)
+            tx1BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx1In]
+                    , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposals)
+                    , C.txOuts = [tx1Out1, tx1Out2]
+                    }
+        signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+        Tx.submitTx sbe localNodeConnectInfo signedTx1
+        let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+            _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+            tx2In3 = Tx.txIn (Tx.txId signedTx1) 2
+        result1TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress1"
+        H.annotate $ show result1TxOut
+
+        -- vote on the constitution
+        let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            dRepVote = map (\x -> (kDRepVoter x, C.No, Nothing)) dReps
+            committeeVote = map (\x -> (committeeVoter x, C.No, Nothing)) committee
+            votes = dRepVote ++ committeeVote
+            txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+            tx2BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                    , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                    , C.txOuts = [tx2Out1]
+                    }
+            dRepWitnesses = map (\d -> C.WitnessPaymentKey $ DRep.castDRep $ kDRepSKey d) dReps
+            committeeWitnesses = map (\c -> C.WitnessPaymentKey $ CC.castCommittee $ committeeHotSKey c) committee
+            totalWitnesses = fromIntegral (length dRepWitnesses + length committeeWitnesses + 1)
+        signedTx2 <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                tx2BodyContent
+                w1Address
+                (Just totalWitnesses)
+                ([C.WitnessPaymentKey w1SKey] ++ dRepWitnesses ++ committeeWitnesses)
+        Tx.submitTx sbe localNodeConnectInfo signedTx2
+        let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+        result2TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress2"
+        H.annotate $ show result2TxOut
+        -- wait for next epoch before asserting for new constitution
+        currentEpoch3 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch3
+
+        currentEpoch4 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch4
+
+        -- wait 2 seconds at start of epoch to account for any delay with constitution enactment
+        liftIO $ threadDelay 2_000_000
+
+        -- check new constituion is enacted
+        newConstitutionHash <- Q.getConstitutionAnchorHashAsString era localNodeConnectInfo
+        constituionHash === newConstitutionHash
+        Helpers.Test.assert "expected constitution hash matches query result" (constituionHash == newConstitutionHash)
+
+multipleCommitteeProposalAndVoteTestInfo committee dReps shelleyWallets stakePools =
+    TestInfo
+        { testName = "multipleCommitteeProposalAndVoteTest"
+        , testDescription = "Multiple propose and vote on new constitutional committee"
+        , test = multipleCommitteeProposalAndVoteTest committee dReps shelleyWallets stakePools
+        }
+
+multipleCommitteeProposalAndVoteTest ::
+    (MonadTest m, MonadIO m) =>
+    [Committee era] ->
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    [StakePool era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multipleCommitteeProposalAndVoteTest
+    committee
+    dReps
+    shelleyWallets
+    stakePools
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch1
+        currentEpoch2 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch2
+        -- record the committee before transaction
+        oldGovState <- Q.getConwayGovernanceState localNodeConnectInfo
+        let oldEnactState = CG.mkEnactState oldGovState
+            oldCommittee = CG.ensCommittee oldEnactState
+            oldCommitteeMembers = CG.committeeMembers (fromJust $ strictMaybeToMaybe oldCommittee)
+            -- build transaction to propose new committee
+            anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/committee.txt"
+            anchor = C.createAnchor (fromJust anchorUrl) "new committee"
+        tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+        let
+            tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+            stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+            prevConstitutionalCommittee = []
+            newConstitutionalCommittee =
+                Map.fromList $
+                    map
+                        ( \c ->
+                            ( L.KeyHashObj $
+                                L.KeyHash (fromJust $ L.hashFromBytes $ C.serialiseToRawBytes (committeeColdKeyHash c))
+                            , (addEpoch currentEpoch2 1)
+                            )
+                        )
+                        committee
+            quorum = 2 % 3
+            proposals =
+                map
+                    ( \sp ->
+                        C.createProposalProcedure
+                            sbe
+                            (C.toShelleyNetwork networkId)
+                            0 -- govActionDeposit
+                            sp
+                            (C.ProposeNewCommittee CL.SNothing prevConstitutionalCommittee newConstitutionalCommittee quorum)
+                            anchor
+                    )
+                    stakeCredentials
+            txProposals = C.shelleyBasedEraConstraints sbe $ Tx.buildTxProposalProcedures (map (\proposal -> (proposal, Nothing)) proposals)
+            tx1BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx1In]
+                    , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposals)
+                    , C.txOuts = [tx1Out1, tx1Out2]
+                    }
+        signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+        Tx.submitTx sbe localNodeConnectInfo signedTx1
+        let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+            _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+            tx2In3 = Tx.txIn (Tx.txId signedTx1) 2 -- change output
+        result1TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
+        H.annotate $ show result1TxOut
+        -- vote on committee
+        let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            -- committee member not allowed to vote on committee update
+            dRepVoters = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
+            spVoters = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
+            votes = dRepVoters ++ spVoters
+            txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+        let tx2BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                    , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                    , C.txOuts = [tx2Out1]
+                    }
+            spWitnesses = map (\sp -> C.WitnessStakePoolKey $ sPSKey sp) stakePools
+            dRepWitnesses = map (\d -> C.WitnessPaymentKey $ DRep.castDRep (kDRepSKey d)) dReps
+            totalWitnesses = fromIntegral (length spWitnesses + length dRepWitnesses + 1)
+        signedTx2 <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                tx2BodyContent
+                w1Address
+                (Just totalWitnesses) -- witnesses
+                ([C.WitnessPaymentKey w1SKey] ++ spWitnesses ++ dRepWitnesses)
+        Tx.submitTx sbe localNodeConnectInfo signedTx2
+        let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+        result2TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
+        H.annotate $ show result2TxOut
+        currentEpoch3 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch3
+
+        currentEpoch4 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch4
+        liftIO $ threadDelay 2_000_000
+        newGovState <- Q.getConwayGovernanceState localNodeConnectInfo
+        let newEnactState = CG.mkEnactState newGovState
+            newCommittee = CG.ensCommittee newEnactState
+            newCommitteeMembers = CG.committeeMembers (fromJust $ strictMaybeToMaybe newCommittee)
+            committeeChanged = oldCommitteeMembers /= newCommitteeMembers
+        Helpers.Test.assert "Expected a different committee after voting procedure" committeeChanged
+
+multipleNoConfidenceProposalAndVoteTestInfo dReps shelleyWallets stakePools =
+    TestInfo
+        { testName = "multipleNoConfidenceProposalAndVoteTest"
+        , testDescription = "Mulriple propose and vote on a motion of no-confidence"
+        , test = multipleNoConfidenceProposalAndVoteTest dReps shelleyWallets stakePools
+        }
+
+multipleNoConfidenceProposalAndVoteTest ::
+    (MonadTest m, MonadIO m) =>
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    [StakePool era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multipleNoConfidenceProposalAndVoteTest
+    dReps
+    shelleyWallets
+    stakePools
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        case sbe of
+            C.ShelleyBasedEraConway -> do
+                currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+                H.annotate $ show currentEpoch1
+                currentEpoch2 <-
+                    Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                        =<< Q.getCurrentEpoch era localNodeConnectInfo
+                H.annotate $ show currentEpoch2
+                let anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/no_confidence.txt"
+                    anchor = C.createAnchor (fromJust anchorUrl) "motion of no confidence"
+                tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+                oldGovState <- Q.getConwayGovernanceState localNodeConnectInfo
+                randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+                let previousGovActions = getPrevGovAction oldGovState
+                    prevUpdateCommitted = udpateCommittee previousGovActions
+                let
+                    tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+                    tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+                    stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+                    stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+                    proposals =
+                        map
+                            ( \sp ->
+                                C.createProposalProcedure
+                                    sbe
+                                    (C.toShelleyNetwork networkId)
+                                    0
+                                    sp
+                                    (C.MotionOfNoConfidence prevUpdateCommitted)
+                                    anchor
+                            )
+                            stakeCredentials
+                    txProposal = C.shelleyBasedEraConstraints sbe $ Tx.buildTxProposalProcedures (map (\p -> (p, Nothing)) proposals)
+                    tx1BodyContent =
+                        (Tx.emptyTxBodyContent sbe pparams)
+                            { C.txIns = Tx.pubkeyTxIns [tx1In]
+                            , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposal)
+                            , C.txOuts = [tx1Out1, tx1Out2]
+                            }
+                signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+                Tx.submitTx sbe localNodeConnectInfo signedTx1
+                let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+                    _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+                    tx2In3 = Tx.txIn (Tx.txId signedTx1) 2 -- change output
+                result1TxOut <-
+                    Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
+                H.annotate $ show result1TxOut
+                -- vote on the motion of no-confidence
+                let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+                    -- committee not allowed to vote on motion of no-confidence
+                    spVotes = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
+                    dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
+                    votes = spVotes ++ dRepVotes
+                    txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+                let tx2BodyContent =
+                        (Tx.emptyTxBodyContent sbe pparams)
+                            { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                            , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                            , C.txOuts = [tx2Out1]
+                            }
+                    spWitnesses = map (\sp -> C.WitnessStakePoolKey (sPSKey sp)) stakePools
+                    dRepWitnesses = map (\d -> C.WitnessPaymentKey (DRep.castDRep $ kDRepSKey d)) dReps
+                    totalWitnesses = fromIntegral (length spWitnesses + length dRepWitnesses + 1)
+                signedTx2 <-
+                    Tx.buildTxWithWitnessOverride
+                        era
+                        localNodeConnectInfo
+                        tx2BodyContent
+                        w1Address
+                        (Just totalWitnesses) -- witnesses
+                        ([C.WitnessPaymentKey w1SKey] ++ spWitnesses ++ dRepWitnesses)
+                Tx.submitTx sbe localNodeConnectInfo signedTx2
+                let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+                result2TxOut <-
+                    Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
+
+                H.annotate $ show result2TxOut
+                return Nothing
+            _ -> error "Expected Test to run in Conway Era"
+
+multiplePrameterChangeProposalAndVoteTestInfo committee dReps shelleyWallets =
+    TestInfo
+        { testName = "multiplePrameterChangeProposalAndVoteTest"
+        , testDescription = "Multiple propose and vote on a change to the protocol parameters"
+        , test = multiplePrameterChangeProposalAndVoteTest committee dReps shelleyWallets
+        }
+
+multiplePrameterChangeProposalAndVoteTest ::
+    (MonadTest m, MonadIO m, L.ConwayEraPParams (C.ShelleyLedgerEra era)) =>
+    [Committee era] ->
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multiplePrameterChangeProposalAndVoteTest
+    committee
+    dReps
+    shelleyWallets
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch1
+        currentEpoch2 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch2
+        let anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/pparameters.txt"
+            anchor = C.createAnchor (fromJust anchorUrl) "protocol parameters"
+        tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+        let
+            tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+            stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+            pparamsUpdate = L.emptyPParamsUpdate & L.ppuCommitteeMinSizeL .~ CL.SJust (1 :: Natural)
+            proposals =
+                map
+                    ( \sp ->
+                        C.createProposalProcedure
+                            sbe
+                            (C.toShelleyNetwork networkId)
+                            0 -- govActionDeposit
+                            sp
+                            (C.UpdatePParams CL.SNothing pparamsUpdate CL.SNothing)
+                            anchor
+                    )
+                    stakeCredentials
+            txProposal = C.shelleyBasedEraConstraints sbe $ Tx.buildTxProposalProcedures (map (\p -> (p, Nothing)) proposals)
+            tx1BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx1In]
+                    , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposal)
+                    , C.txOuts = [tx1Out1, tx1Out2]
+                    }
+        signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+        Tx.submitTx sbe localNodeConnectInfo signedTx1
+        let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+            _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+            tx2In3 = Tx.txIn (Tx.txId signedTx1) 2 -- change output
+        result1TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
+        H.annotate $ show result1TxOut
+        -- vote
+        let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            -- SPO not allowed to vote on protocol parameters update
+            dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
+            committeeVotes = map (\c -> (committeeVoter c, C.No, Nothing)) committee
+            votes = dRepVotes ++ committeeVotes
+            txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+        let tx2BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                    , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                    , C.txOuts = [tx2Out1]
+                    }
+            dRepWitnesses = map (\d -> C.WitnessPaymentKey (DRep.castDRep $ kDRepSKey d)) dReps
+            committeeWitnesses = map (\c -> C.WitnessPaymentKey (CC.castCommittee $ committeeHotSKey c)) committee
+            totalWitnesses = fromIntegral (length dRepWitnesses + length committeeWitnesses + 1)
+        signedTx2 <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                tx2BodyContent
+                w1Address
+                (Just totalWitnesses) -- witnesses
+                ([C.WitnessPaymentKey w1SKey] ++ dRepWitnesses ++ committeeWitnesses)
+        Tx.submitTx sbe localNodeConnectInfo signedTx2
+        let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+        result2TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
+        H.annotate $ show result2TxOut
+        return Nothing
+
+multipleTreasuryWithdrawalProposalAndVoteTestInfo committee dRep shelleyWallets =
+    TestInfo
+        { testName = "multipleTreasuryWithdrawalProposalAndVoteTest"
+        , testDescription = "Multiple propose and vote on a treasury withdrawal"
+        , test = multipleTreasuryWithdrawalProposalAndVoteTest committee dRep shelleyWallets
+        }
+
+multipleTreasuryWithdrawalProposalAndVoteTest ::
+    (MonadTest m, MonadIO m) =>
+    [Committee era] ->
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multipleTreasuryWithdrawalProposalAndVoteTest
+    committee
+    dReps
+    shelleyWallets
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch1
+        currentEpoch2 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch2
+        let anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/treasury_withdrawal.txt"
+            anchor = C.createAnchor (fromJust anchorUrl) "treasury withdrawal"
+        tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+        let
+            tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+            stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+            tWithdrawal = map (\sc -> (CL.Testnet, sc, 10_000_000 :: L.Coin)) stakeCredentials
+            proposals =
+                map
+                    ( \sp ->
+                        C.createProposalProcedure
+                            sbe
+                            (C.toShelleyNetwork networkId)
+                            0 -- govActionDeposit
+                            sp
+                            (C.TreasuryWithdrawal tWithdrawal CL.SNothing) -- SNothing is Governance policy
+                            anchor
+                    )
+                    stakeCredentials
+            txProposal = C.shelleyBasedEraConstraints sbe $ Tx.buildTxProposalProcedures (map (\p -> (p, Nothing)) proposals)
+            tx1BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx1In]
+                    , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposal)
+                    , C.txOuts = [tx1Out1, tx1Out2]
+                    }
+        signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+        Tx.submitTx sbe localNodeConnectInfo signedTx1
+        let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+            _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+            tx2In3 = Tx.txIn (Tx.txId signedTx1) 2 -- change output
+        result1TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
+        H.annotate $ show result1TxOut
+        -- vote on the treasury withdrawal
+        let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            -- SPO not allowed to vote on treasury withdrawal
+            dRepVotes = map (\d -> (kDRepVoter d, C.Yes, Nothing)) dReps
+            committeeVotes = map (\c -> (committeeVoter c, C.Yes, Nothing)) committee
+            votes = dRepVotes ++ committeeVotes
+            txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+        let tx2BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                    , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                    , C.txOuts = [tx2Out1]
+                    }
+            dRepWitnesses = map (\d -> C.WitnessPaymentKey (DRep.castDRep $ kDRepSKey d)) dReps
+            committeeWitnesses = map (\c -> C.WitnessPaymentKey (CC.castCommittee $ committeeHotSKey c)) committee
+            totalWitnesses = fromIntegral $ (length $ dRepWitnesses ++ committeeWitnesses) + 1
+        signedTx2 <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                tx2BodyContent
+                w1Address
+                (Just totalWitnesses) -- witnesses
+                ([C.WitnessPaymentKey w1SKey] ++ dRepWitnesses ++ committeeWitnesses)
+        Tx.submitTx sbe localNodeConnectInfo signedTx2
+        let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+        result2TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
+        H.annotate $ show result2TxOut
+        return Nothing
+
+mkProtocolVersionOrErr :: (Natural, Natural) -> L.ProtVer
+mkProtocolVersionOrErr (majorProtVer, minorProtVer) =
+    case (`L.ProtVer` minorProtVer) <$> L.mkVersion majorProtVer of
+        Just v -> v
+        Nothing ->
+            error $ "mkProtocolVersionOrErr: invalid protocol version " <> show (majorProtVer, minorProtVer)
+
+multipleHardForkProposalAndVoteTestInfo committee dReps shelleyWallet stakePools =
+    TestInfo
+        { testName = "multipleHardForkProposalAndVoteTest"
+        , testDescription = "Multiple Propose and vote on a hard fork"
+        , test = multipleHardForkProposalAndVoteTest committee dReps shelleyWallet stakePools
+        }
+
+multipleHardForkProposalAndVoteTest ::
+    (MonadTest m, MonadIO m) =>
+    [Committee era] ->
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    [StakePool era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multipleHardForkProposalAndVoteTest
+    committee
+    dReps
+    shelleyWallets
+    stakePools
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch1
+        currentEpoch2 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch2
+        -- create proposal
+        let anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/hard_fork.txt"
+            anchor = C.createAnchor (fromJust anchorUrl) "hard fork"
+        tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+        pvNat :: Natural <- toEnum <$> TN.pvFromOptions networkOptions
+        let
+            stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+            stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+            tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            nextPv = mkProtocolVersionOrErr (pvNat, 1)
+            proposals =
+                map
+                    ( \sp ->
+                        C.createProposalProcedure
+                            sbe
+                            (C.toShelleyNetwork networkId)
+                            0 -- govActionDeposit
+                            sp
+                            (C.InitiateHardfork CL.SNothing nextPv)
+                            anchor
+                    )
+                    stakeCredentials
+            txProposal = C.shelleyBasedEraConstraints sbe $ Tx.buildTxProposalProcedures (map (\p -> (p, Nothing)) proposals)
+            tx1BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx1In]
+                    , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposal)
+                    , C.txOuts = [tx1Out1, tx1Out2]
+                    }
+        signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+        Tx.submitTx sbe localNodeConnectInfo signedTx1
+        let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+            _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+            tx2In3 = Tx.txIn (Tx.txId signedTx1) 2 -- change output
+        result1TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
+        H.annotate $ show result1TxOut
+        -- vote
+        let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            committeeVotes = map (\c -> (committeeVoter c, C.No, Nothing)) committee
+            dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
+            spVotes = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
+            votes = committeeVotes ++ dRepVotes ++ spVotes
+            txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+            tx2BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                    , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                    , C.txOuts = [tx2Out1]
+                    }
+            stakePoolWitnesses = map (\sp -> C.WitnessStakePoolKey (sPSKey sp)) stakePools
+            dRepWitnesses = map (\d -> C.WitnessPaymentKey (DRep.castDRep (kDRepSKey d))) dReps
+            committeeWitnesses = map (\c -> C.WitnessPaymentKey (CC.castCommittee (committeeHotSKey c))) committee
+            totalWitnesses = fromIntegral $ (length $ stakePoolWitnesses ++ dRepWitnesses ++ committeeWitnesses) + 1
+        signedTx2 <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                tx2BodyContent
+                w1Address
+                (Just totalWitnesses) -- witnesses
+                ([C.WitnessPaymentKey w1SKey] ++ stakePoolWitnesses ++ dRepWitnesses ++ committeeWitnesses)
+        Tx.submitTx sbe localNodeConnectInfo signedTx2
+        let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+        result2TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
+        H.annotate $ show result2TxOut
+        return Nothing
+
+multipleInfoProposalAndVoteTestInfo committee dReps shelleyWallet stakePools =
+    TestInfo
+        { testName = "multipleInfoProposalAndVoteTest"
+        , testDescription = "Multiple propose and vote on an Info action"
+        , test = multipleInfoProposalAndVoteTest committee dReps shelleyWallet stakePools
+        }
+
+multipleInfoProposalAndVoteTest ::
+    (MonadTest m, MonadIO m) =>
+    [Committee era] ->
+    [DRep era] ->
+    [ShelleyWallet era] ->
+    [StakePool era] ->
+    TN.TestEnvironmentOptions era ->
+    TestParams era ->
+    m (Maybe String)
+multipleInfoProposalAndVoteTest
+    committee
+    dReps
+    shelleyWallets
+    stakePools
+    networkOptions
+    TestParams{localNodeConnectInfo, pparams, networkId, tempAbsPath} = do
+        era <- TN.eraFromOptionsM networkOptions
+        skeyAndAddress <- TN.w tempAbsPath networkId
+        let (w1SKey, _, w1Address) = skeyAndAddress !! 0
+            sbe = toShelleyBasedEra era
+            ceo = toConwayEraOnwards era
+        currentEpoch1 <- Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch1
+        currentEpoch2 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch2
+        let anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/info.txt"
+            anchor = C.createAnchor (fromJust anchorUrl) "Info"
+        tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
+        randomShelleyWallets <- pickRandomElements 50 shelleyWallets
+        let
+            tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
+            tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
+            stakeSKeys = map (\(ShelleyWallet skey _) -> skey) randomShelleyWallets
+            stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
+            proposals =
+                map
+                    ( \sp ->
+                        C.createProposalProcedure
+                            sbe
+                            (C.toShelleyNetwork networkId)
+                            0 -- govActionDeposit
+                            sp
+                            C.InfoAct
+                            anchor
+                    )
+                    stakeCredentials
+            txProposal = C.shelleyBasedEraConstraints sbe $ Tx.buildTxProposalProcedures (map (\p -> (p, Nothing)) proposals)
+            tx1BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx1In]
+                    , C.txProposalProcedures = C.forEraInEonMaybe era (`C.Featured` txProposal)
+                    , C.txOuts = [tx1Out1, tx1Out2]
+                    }
+        signedTx1 <- Tx.buildTx era localNodeConnectInfo tx1BodyContent w1Address [w1SKey]
+        Tx.submitTx sbe localNodeConnectInfo signedTx1
+        let _tx2In1@(C.TxIn tx2InId1 _tx2InIx1) = Tx.txIn (Tx.txId signedTx1) 0
+            _tx2In2 = Tx.txIn (Tx.txId signedTx1) 1
+            tx2In3 = Tx.txIn (Tx.txId signedTx1) 2 -- change output
+        result1TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
+        H.annotate $ show result1TxOut
+        -- vote
+        let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
+            committeeVotes = map (\c -> (committeeVoter c, C.No, Nothing)) committee
+            dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
+            spVotes = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
+            votes = committeeVotes ++ dRepVotes ++ spVotes
+            txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
+            tx2BodyContent =
+                (Tx.emptyTxBodyContent sbe pparams)
+                    { C.txIns = Tx.pubkeyTxIns [tx2In3]
+                    , C.txVotingProcedures = C.forEraInEonMaybe era (`C.Featured` txVotingProcedures)
+                    , C.txOuts = [tx2Out1]
+                    }
+            stakePoolWitnesses = map (\sp -> C.WitnessStakePoolKey (sPSKey sp)) stakePools
+            dRepWitnesses = map (\d -> C.WitnessPaymentKey (DRep.castDRep (kDRepSKey d))) dReps
+            committeeWitnesses = map (\c -> C.WitnessPaymentKey (CC.castCommittee (committeeHotSKey c))) committee
+            totalWitnesses = fromIntegral $ (length $ stakePoolWitnesses ++ dRepWitnesses ++ committeeWitnesses) + 1
+        signedTx2 <-
+            Tx.buildTxWithWitnessOverride
+                era
+                localNodeConnectInfo
+                tx2BodyContent
+                w1Address
+                (Just totalWitnesses) -- witnesses
+                ([C.WitnessPaymentKey w1SKey] ++ stakePoolWitnesses ++ dRepWitnesses ++ committeeWitnesses)
+        Tx.submitTx sbe localNodeConnectInfo signedTx2
+        let result2TxIn = Tx.txIn (Tx.txId signedTx2) 0
+        result2TxOut <-
+            Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
+        H.annotate $ show result2TxOut
+        return Nothing

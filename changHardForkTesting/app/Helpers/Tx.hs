@@ -159,7 +159,7 @@ emptyTxBodyContent ::
     C.ShelleyBasedEra era -> C.LedgerProtocolParameters era -> C.TxBodyContent C.BuildTx era
 emptyTxBodyContent sbe pparams = (C.defaultTxBodyContent sbe){C.txProtocolParams = C.BuildTxWith $ Just pparams}
 
-txFee :: C.CardanoEra era -> C.Lovelace -> C.TxFee era
+txFee :: C.CardanoEra era -> L.Coin -> C.TxFee era
 txFee era =
     C.inEonForEra (error $ notSupportedError era) (\e -> C.TxFeeExplicit e) era
 
@@ -191,7 +191,7 @@ txReturnCollateral :: C.CardanoEra era -> C.TxOut C.CtxTx era -> C.TxReturnColla
 txReturnCollateral era txIns =
     C.inEonForEra (error $ notSupportedError era) (\e -> C.TxReturnCollateral e txIns) era
 
-txTotalCollateral :: C.CardanoEra era -> C.Lovelace -> C.TxTotalCollateral era
+txTotalCollateral :: C.CardanoEra era -> L.Coin -> C.TxTotalCollateral era
 txTotalCollateral era lovelace =
     C.inEonForEra (error $ notSupportedError era) (\e -> C.TxTotalCollateral e lovelace) era
 
@@ -283,9 +283,14 @@ buildTxVotingProcedures sbe ceo txId txIx votesWithSWitness = C.shelleyBasedEraC
                 <&> (\(v, lvp, msw) -> (C.singletonVotingProcedures ceo v gAID lvp, msw))
         cardanoVotingProceduresWithOutSWitness =
             cardanoVotingProceduresWithSWitness <&> (\(cvp, _msw) -> cvp)
+        votingProcedures =
+            foldr1
+                ( \vp1 vp2 -> case C.mergeVotingProcedures vp1 vp2 of
+                    Left err -> error "error merging voring procedires"
+                    Right vp -> vp
+                )
+                cardanoVotingProceduresWithOutSWitness
         voterAndSWitnessMap = Map.unions $ votesWithSWitness <&> (\(voter, _, msw) -> voterSWitnessSingleton voter msw)
-
-        votingProcedures = foldr1 C.unsafeMergeVotingProcedures cardanoVotingProceduresWithOutSWitness
     C.TxVotingProcedures (C.unVotingProcedures votingProcedures) (C.BuildTxWith voterAndSWitnessMap)
   where
     voterSWitnessSingleton ::

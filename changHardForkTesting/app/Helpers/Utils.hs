@@ -3,6 +3,11 @@
 module Helpers.Utils where
 
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as C
+import Cardano.Api.Ledger qualified as L
+import Cardano.Ledger.Api qualified as L
+import Cardano.Ledger.Conway.Governance qualified as CG
+import Control.Lens.Getter ((^.))
 import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor (void)
@@ -100,3 +105,20 @@ getVkey skey = C.getVerificationKey skey
 
 paymentKeyToAddress :: C.SigningKey C.PaymentKey -> C.NetworkId -> C.Address C.ShelleyAddr
 paymentKeyToAddress skey netId = makeAddress (Left $ getVkey skey) netId
+
+data GovPurpose era = GovPurpose
+    { udpateCommittee :: C.StrictMaybe (L.GovPurposeId 'L.CommitteePurpose era)
+    , pParamUpdate :: C.StrictMaybe (L.GovPurposeId 'L.PParamUpdatePurpose era)
+    , hardFork :: C.StrictMaybe (L.GovPurposeId 'L.HardForkPurpose era)
+    , constitution :: C.StrictMaybe (L.GovPurposeId 'L.ConstitutionPurpose era)
+    }
+
+getPrevGovAction oldGovState = do
+    let prevEnactedGovActions = oldGovState ^. CG.proposalsGovStateL ^. CG.pRootsL
+        prevUpdateCommittee = CG.prRoot $ CG.grCommittee prevEnactedGovActions
+        prevPParamUpdate = CG.prRoot $ CG.grPParamUpdate prevEnactedGovActions
+        prevHardFork = CG.prRoot $ CG.grHardFork prevEnactedGovActions
+        prevConstitution = CG.prRoot $ CG.grConstitution prevEnactedGovActions
+    GovPurpose prevUpdateCommittee prevPParamUpdate prevHardFork prevConstitution
+
+addEpoch e i = L.EpochNo $ L.unEpochNo e + i
