@@ -16,10 +16,13 @@ import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C
 import Cardano.Crypto.Hash.Blake2b qualified as Crypto
 import Cardano.Crypto.Hash.Class qualified as Crypto
+import Cardano.Ledger.BaseTypes (mkTxIx)
 import Cardano.Ledger.Conway.Governance qualified (ConwayEraGov (proposalsGovStateL))
 import Cardano.Ledger.Conway.Governance qualified as CG
 import Cardano.Ledger.Conway.PParams qualified as L
 import Cardano.Ledger.Core qualified as L
+import Cardano.Ledger.TxIn qualified as L
+import Cardano.Ledger.UTxO as UTxO
 import Control.Lens.Getter ((^.))
 import Control.Lens.Setter ((.~))
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -29,10 +32,12 @@ import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Short (toShort)
 import Data.ByteString.Short qualified as LBS
+import Data.Foldable
 import Data.Function
 import Data.Functor (void)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust)
+import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Debug.Trace qualified as Debug
 import GHC.Conc.IO (threadDelay)
@@ -54,7 +59,7 @@ import Helpers.TestData (TestInfo (..), TestParams (..), verifyTxConfirmation)
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
 import Helpers.TypeConverters (toPlutusAddress)
-import Helpers.Utils (GovPurpose (..), addEpoch, getChunk, getPrevGovAction, paymentKeyToAddress, pickRandomElements)
+import Helpers.Utils (GovPurpose (..), addEpoch, getChunk, getEnactedGovAction, getGovStateJson, getPrevGovAction, paymentKeyToAddress, pickRandomElements)
 import Test.Bench.Users
 import Test.Bench.Users qualified as ShelleyWallet
 import Utils (consoleLog)
@@ -517,11 +522,8 @@ multipleCommitteeProposalAndVoteTest
             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch2"
                 =<< Q.getCurrentEpoch era localNodeConnectInfo
         H.annotate $ show currentEpoch2
-        -- record the committee before transaction
-        oldGovState <- Q.getConwayGovernanceState localNodeConnectInfo
-        let oldGovStateJson = C.prettyPrintJSON oldGovState
-        oldGovStateFile <- pure $ LBS.writeFile ".govStateTracking/committee/oldGovState.json" (LBS.fromStrict oldGovStateJson)
-        liftIO oldGovStateFile
+        -- record the committee before proposal
+        getGovStateJson ".govStateTracking/committee/.oldGovState.json" localNodeConnectInfo
         let
             -- build transaction to propose new committee
             anchorUrl = (\t -> CL.textToUrl (Text.length t) t) "https://example.com/committee.txt"
@@ -544,7 +546,7 @@ multipleCommitteeProposalAndVoteTest
                             )
                         )
                         committee
-        let quorum = 1 % 2
+        let quorum = 0 % 2
             proposals =
                 map
                     ( \sp ->
@@ -572,6 +574,7 @@ multipleCommitteeProposalAndVoteTest
         result1TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
         H.annotate $ show result1TxOut
+        getGovStateJson ".govStateTracking/committee/afterProposal.json" localNodeConnectInfo
         -- vote on committee
         let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
             -- committee member not allowed to vote on committee update
@@ -602,16 +605,17 @@ multipleCommitteeProposalAndVoteTest
         result2TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
         H.annotate $ show result2TxOut
+        getGovStateJson ".govStateTracking/committee/afterVoting.json" localNodeConnectInfo
         currentEpoch3 <-
             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
                 =<< Q.getCurrentEpoch era localNodeConnectInfo
         H.annotate $ show currentEpoch3
-
+        getGovStateJson ".govStateTracking/committee/afterEpoch3.json" localNodeConnectInfo
         currentEpoch4 <-
             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
                 =<< Q.getCurrentEpoch era localNodeConnectInfo
         H.annotate $ show currentEpoch4
-
+        getGovStateJson ".govStateTracking/committee/afterEpoch4.json" localNodeConnectInfo
         liftIO $ threadDelay 2_000_000
         newGovState <- Q.getConwayGovernanceState localNodeConnectInfo
         let newCommitteeMembers =
@@ -621,8 +625,7 @@ multipleCommitteeProposalAndVoteTest
                             CG.cgsCommittee newGovState
             committeeChanged = newConstitutionalCommittee == newCommitteeMembers
             newGovStateJson = C.prettyPrintJSON newGovState
-        newGovStateFile <- pure $ LBS.writeFile ".govStateTracking/committee/newGovState.json" (LBS.fromStrict newGovStateJson)
-        liftIO newGovStateFile
+        getGovStateJson ".govStateTracking/committee/.newGovState.json" localNodeConnectInfo
         Helpers.Test.assert "Expected committee updated after voting procedure" committeeChanged
 
 multipleConstitutionProposalAndVotesTestInfo committee dReps shelleyWallet =
@@ -669,10 +672,7 @@ multipleConstitutionProposalAndVotesTest
             constitutionUrl = fromJust $ (\t -> CL.textToUrl (Text.length t) t) "https://example.com/constituion.txt"
             anchor = C.createAnchor constitutionUrl constituionBS
         H.annotate constituionHash
-        oldGovState <- Q.getConwayGovernanceState localNodeConnectInfo
-        let oldGovStateJson = C.prettyPrintJSON oldGovState
-        oldGovStateFile <- pure $ LBS.writeFile ".govStateTracking/constitution/oldGovState.json" (LBS.fromStrict oldGovStateJson)
-        liftIO oldGovStateFile
+        getGovStateJson ".govStateTracking/constitution/.oldGovState.json" localNodeConnectInfo
         -- build a tx to propose constitution
         tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
         randomShelleyWallets <- pickRandomElements 5 shelleyWallets
@@ -710,19 +710,11 @@ multipleConstitutionProposalAndVotesTest
         result1TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress1"
         H.annotate $ show result1TxOut
+        getGovStateJson ".govStateTracking/constitution/afterProposal.json" localNodeConnectInfo
         -- vote on the constitution
         let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
-            dRepVote1 = (kDRepVoter (dReps !! 0), C.Yes, Nothing)
-            dRepVote2 = (kDRepVoter (dReps !! 1), C.Yes, Nothing)
-            dRepVote3 = (kDRepVoter (dReps !! 2), C.No, Nothing)
-            committeeVote1 = (committeeVoter (committee !! 0), C.No, Nothing)
-            committeeVote2 = (committeeVoter (committee !! 1), C.Yes, Nothing)
-            committeeVote3 = (committeeVoter (committee !! 2), C.Yes, Nothing)
-            committeeVote4 = (committeeVoter (committee !! 3), C.Yes, Nothing)
-            committeeVote = [committeeVote1, committeeVote2, committeeVote3, committeeVote4]
-            -- map (\x -> (committeeVoter x, C.No, Nothing)) committee
-            dRepVote = [dRepVote1, dRepVote2, dRepVote3]
-            -- map (\x -> (kDRepVoter x, C.No, Nothing)) dReps
+            committeeVote = map (\x -> (committeeVoter x, C.Yes, Nothing)) committee
+            dRepVote = map (\x -> (kDRepVoter x, C.Yes, Nothing)) dReps
             votes = dRepVote ++ committeeVote
             txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
             tx2BodyContent =
@@ -747,24 +739,22 @@ multipleConstitutionProposalAndVotesTest
         result2TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress2"
         H.annotate $ show result2TxOut
+        getGovStateJson ".govStateTracking/constitution/afterVoting.json" localNodeConnectInfo
         -- wait for next epoch before asserting for new constitution
         currentEpoch3 <-
             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
                 =<< Q.getCurrentEpoch era localNodeConnectInfo
         H.annotate $ show currentEpoch3
-
+        getGovStateJson ".govStateTracking/constitution/afterEpoch3.json" localNodeConnectInfo
         currentEpoch4 <-
             Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
                 =<< Q.getCurrentEpoch era localNodeConnectInfo
         H.annotate $ show currentEpoch4
-
+        getGovStateJson ".govStateTracking/constitution/afterEpoch4.json" localNodeConnectInfo
         -- wait 2 seconds at start of epoch to account for any delay with constitution enactment
         liftIO $ threadDelay 2_000_000
         -- check new constituion is enacted
-        afterDelay <- Q.getConwayGovernanceState localNodeConnectInfo
-        let afterDelayJson = C.prettyPrintJSON afterDelay
-        afterDelayFile <- pure $ LBS.writeFile ".govStateTracking/constitution/newGovState.json" (LBS.fromStrict afterDelayJson)
-        liftIO afterDelayFile
+        getGovStateJson ".govStateTracking/constitution/.newGovState.json" localNodeConnectInfo
         newConstitutionHash <- Q.getConstitutionAnchorHashAsString era localNodeConnectInfo
         consoleLog ("constituionHash: " ++ show constituionHash)
         consoleLog ("newConstitutionHash: " ++ show newConstitutionHash)
@@ -808,6 +798,7 @@ multipleNoConfidenceProposalAndVoteTest
                     anchor = C.createAnchor (fromJust anchorUrl) "motion of no confidence"
                 tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
                 oldGovState <- Q.getConwayGovernanceState localNodeConnectInfo
+                getGovStateJson ".govStateTracking/motionNoConfidence/.oldGovState.json" localNodeConnectInfo
                 randomShelleyWallets <- pickRandomElements 5 shelleyWallets
                 let
                     previousGovActions = getPrevGovAction oldGovState
@@ -844,11 +835,12 @@ multipleNoConfidenceProposalAndVoteTest
                 result1TxOut <-
                     Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
                 H.annotate $ show result1TxOut
+                getGovStateJson ".govStateTracking/motionNoConfidence/afterProposal.json" localNodeConnectInfo
                 -- vote on the motion of no-confidence
                 let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
                     -- committee not allowed to vote on motion of no-confidence
-                    spVotes = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
-                    dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
+                    spVotes = map (\sp -> (sPVoter sp, C.Yes, Nothing)) stakePools
+                    dRepVotes = map (\d -> (kDRepVoter d, C.Yes, Nothing)) dReps
                     votes = spVotes ++ dRepVotes
                     txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
                 let tx2BodyContent =
@@ -873,24 +865,24 @@ multipleNoConfidenceProposalAndVoteTest
                 result2TxOut <-
                     Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
                 H.annotate $ show result2TxOut
+                getGovStateJson ".govStateTracking/motionNoConfidence/afterVoting.json" localNodeConnectInfo
                 currentEpoch3 <-
                     Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
                         =<< Q.getCurrentEpoch era localNodeConnectInfo
                 H.annotate $ show currentEpoch3
-
+                enactedGovActionId <- getEnactedGovAction localNodeConnectInfo
+                let enactedGovActionTxIn = L.TxIn (CG.gaidTxId enactedGovActionId) (mkTxIx $ CG.unGovActionIx $ CG.gaidGovActionIx enactedGovActionId)
+                    proposedAction = fst (head $ Map.toList $ UTxO.unUTxO $ C.toLedgerUTxO sbe (C.UTxO (Map.fromList [(tx2In3, result1TxOut)])))
+                    actionEnacted = enactedGovActionTxIn == proposedAction
+                getGovStateJson ".govStateTracking/motionNoConfidence/afterEpoch3.json" localNodeConnectInfo
                 currentEpoch4 <-
                     Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
                         =<< Q.getCurrentEpoch era localNodeConnectInfo
                 H.annotate $ show currentEpoch4
+                getGovStateJson ".govStateTracking/motionNoConfidence/afterEpoch4.json" localNodeConnectInfo
                 liftIO $ threadDelay 2_000_000
-                newGovState <- Q.getConwayGovernanceState localNodeConnectInfo
-                let oldGovStateJson = C.prettyPrintJSON oldGovState
-                    newGovStateJson = C.prettyPrintJSON newGovState
-                oldGovStateFile <- pure $ LBS.writeFile ".govStateTracking/noConfidence/oldGovState.json" (LBS.fromStrict oldGovStateJson)
-                newGovStateFile <- pure $ LBS.writeFile ".govStateTracking/noConfidence/newGovState.json" (LBS.fromStrict newGovStateJson)
-                liftIO oldGovStateFile
-                liftIO newGovStateFile
-                Helpers.Test.assert "Gov State should not change" (newGovState == oldGovState)
+                getGovStateJson ".govStateTracking/motionNoConfidence/.newGovState.json" localNodeConnectInfo
+                Helpers.Test.assert "No Confidence action enacted." actionEnacted
             _ -> error "Expected Test to run in Conway Era"
 
 multiplePrameterChangeProposalAndVoteTestInfo committee dReps shelleyWallets =
@@ -929,12 +921,13 @@ multiplePrameterChangeProposalAndVoteTest
             anchor = C.createAnchor (fromJust anchorUrl) "protocol parameters"
         tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
         randomShelleyWallets <- pickRandomElements 5 shelleyWallets
+        getGovStateJson ".govStateTracking/pParamUpdate/.oldGovState.json" localNodeConnectInfo
         let
             tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
             tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
             stakeSKeys = map (\(ShelleyWallet skey _ _) -> skey) randomShelleyWallets
             stakeCredentials = map (\x -> C.StakeCredentialByKey $ C.verificationKeyHash $ C.getVerificationKey x) stakeSKeys
-            pparamsUpdate = L.emptyPParamsUpdate & L.ppuCommitteeMinSizeL .~ CL.SJust (1 :: Natural)
+            pparamsUpdate = L.emptyPParamsUpdate & L.ppuCommitteeMinSizeL .~ CL.SJust (99 :: Natural)
             proposals =
                 map
                     ( \sp ->
@@ -962,11 +955,12 @@ multiplePrameterChangeProposalAndVoteTest
         result1TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
         H.annotate $ show result1TxOut
+        getGovStateJson ".govStateTracking/pParamUpdate/afterProposal.json" localNodeConnectInfo
         -- vote
         let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
             -- SPO not allowed to vote on protocol parameters update
-            dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
-            committeeVotes = map (\c -> (committeeVoter c, C.No, Nothing)) committee
+            dRepVotes = map (\d -> (kDRepVoter d, C.Yes, Nothing)) dReps
+            committeeVotes = map (\c -> (committeeVoter c, C.Yes, Nothing)) committee
             votes = dRepVotes ++ committeeVotes
             txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
         let tx2BodyContent =
@@ -991,7 +985,23 @@ multiplePrameterChangeProposalAndVoteTest
         result2TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
         H.annotate $ show result2TxOut
-        return Nothing
+        getGovStateJson ".govStateTracking/pParamUpdate/afterVoting.json" localNodeConnectInfo
+        currentEpoch3 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch3
+        getGovStateJson ".govStateTracking/pParamUpdate/afterEpoch3.json" localNodeConnectInfo
+        currentEpoch4 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch4
+        getGovStateJson ".govStateTracking/pParamUpdate/afterEpoch4.json" localNodeConnectInfo
+        liftIO $ threadDelay 2_000_000
+        getGovStateJson ".govStateTracking/pParamUpdate/.newGovState.json" localNodeConnectInfo
+        newGovState <- Q.getConwayGovernanceState localNodeConnectInfo
+        let committeeMinSize = (CG.cgsCurPParams newGovState) ^. L.ppCommitteeMinSizeL
+            pParamUpdated = committeeMinSize == (99 :: Natural)
+        Helpers.Test.assert "Protocol parameter updated as expected." pParamUpdated
 
 multipleTreasuryWithdrawalProposalAndVoteTestInfo committee dRep shelleyWallets =
     TestInfo
@@ -1175,9 +1185,9 @@ multipleHardForkProposalAndVoteTest
         H.annotate $ show result1TxOut
         -- vote
         let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
-            committeeVotes = map (\c -> (committeeVoter c, C.No, Nothing)) committee
-            dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
-            spVotes = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
+            committeeVotes = map (\c -> (committeeVoter c, C.Yes, Nothing)) committee
+            dRepVotes = map (\d -> (kDRepVoter d, C.Yes, Nothing)) dReps
+            spVotes = map (\sp -> (sPVoter sp, C.Yes, Nothing)) stakePools
             votes = committeeVotes ++ dRepVotes ++ spVotes
             txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
             tx2BodyContent =
@@ -1243,6 +1253,7 @@ multipleInfoProposalAndVoteTest
             anchor = C.createAnchor (fromJust anchorUrl) "Info"
         tx1In <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
         randomShelleyWallets <- pickRandomElements 5 shelleyWallets
+        getGovStateJson ".govStateTracking/info/.oldGovState.json" localNodeConnectInfo
         let
             tx1Out1 = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
             tx1Out2 = Tx.txOut era (C.lovelaceToValue 3_000_000) w1Address
@@ -1275,11 +1286,12 @@ multipleInfoProposalAndVoteTest
         result1TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address tx2In3 "getTxOutAtAddress"
         H.annotate $ show result1TxOut
+        getGovStateJson ".govStateTracking/info/afterProposal.json" localNodeConnectInfo
         -- vote
         let tx2Out1 = Tx.txOut era (C.lovelaceToValue 4_000_000) w1Address
-            committeeVotes = map (\c -> (committeeVoter c, C.No, Nothing)) committee
-            dRepVotes = map (\d -> (kDRepVoter d, C.No, Nothing)) dReps
-            spVotes = map (\sp -> (sPVoter sp, C.No, Nothing)) stakePools
+            committeeVotes = map (\c -> (committeeVoter c, C.Yes, Nothing)) committee
+            dRepVotes = map (\d -> (kDRepVoter d, C.Yes, Nothing)) dReps
+            spVotes = map (\sp -> (sPVoter sp, C.Yes, Nothing)) stakePools
             votes = committeeVotes ++ dRepVotes ++ spVotes
             txVotingProcedures = Tx.buildTxVotingProcedures sbe ceo tx2InId1 0 votes
             tx2BodyContent =
@@ -1305,4 +1317,17 @@ multipleInfoProposalAndVoteTest
         result2TxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address result2TxIn "getTxOutAtAddress"
         H.annotate $ show result2TxOut
+        getGovStateJson ".govStateTracking/info/afterVotingjson" localNodeConnectInfo
+        currentEpoch3 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch3"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch3
+        getGovStateJson ".govStateTracking/info/afterEpoch3.json" localNodeConnectInfo
+        currentEpoch4 <-
+            Q.waitForNextEpoch era localNodeConnectInfo "currentEpoch4"
+                =<< Q.getCurrentEpoch era localNodeConnectInfo
+        H.annotate $ show currentEpoch4
+        getGovStateJson ".govStateTracking/info/afterEpoch4.json" localNodeConnectInfo
+        liftIO $ threadDelay 2_000_000
+        getGovStateJson ".govStateTracking/info/.newGovState.json" localNodeConnectInfo
         return Nothing

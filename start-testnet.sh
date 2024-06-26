@@ -16,6 +16,11 @@ if [ -d ".stakePools" ]; then
     rm -rf .stakePools
 fi
 
+if [ -d ".govStateTracking" ]; then
+    echo "Removing existing .govStateTracking folder"
+    rm -rf .govStateTracking
+fi
+
 # Create .cluster folder
 echo "Creating .cluster folder"
 mkdir .cluster
@@ -26,6 +31,15 @@ mkdir .shelleyWallets
 
 echo "Creating .stakePools folder"
 mkdir .stakePools
+
+echo "Creating .govStateTracking folder"
+mkdir .govStateTracking
+mkdir .govStateTracking/committee
+mkdir .govStateTracking/committeeNoConfidence
+mkdir .govStateTracking/constitution
+mkdir .govStateTracking/info
+mkdir .govStateTracking/motionNoConfidence
+mkdir .govStateTracking/pParamUpdate
 
 export START_TESTNET=1
 

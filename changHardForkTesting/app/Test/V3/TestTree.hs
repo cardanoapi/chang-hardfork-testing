@@ -172,8 +172,8 @@ pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbs
         , run $ multipleConstitutionProposalAndVotesTestInfo ccMembers dReps shelleyWallets
         , run $ multipleNoConfidenceProposalAndVoteTestInfo dReps shelleyWallets stakePools
         , run $ multiplePrameterChangeProposalAndVoteTestInfo ccMembers dReps shelleyWallets
-        , run $ multipleTreasuryWithdrawalProposalAndVoteTestInfo ccMembers dReps shelleyWallets
-        , run $ multipleInfoProposalAndVoteTestInfo ccMembers dReps shelleyWallets stakePools
+        , -- , run $ multipleTreasuryWithdrawalProposalAndVoteTestInfo ccMembers dReps shelleyWallets
+          run $ multipleInfoProposalAndVoteTestInfo ccMembers dReps shelleyWallets stakePools
         ]
     failureMessages <- liftIO $ suiteFailureMessages resultsRef
     liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)

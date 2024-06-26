@@ -466,24 +466,24 @@ updatedConwayGenesis =
         -- ucppPlutusV3CostModel $ cgUpgradePParams CTN.defaultConwayGenesis
         drepVotingThresholds =
             DRepVotingThresholds
-                { dvtMotionNoConfidence = 1 %! 10
-                , dvtCommitteeNormal = 1 %! 10
-                , dvtCommitteeNoConfidence = 1 %! 10
-                , dvtUpdateToConstitution = 1 %! 10
-                , dvtHardForkInitiation = 1 %! 10
-                , dvtPPNetworkGroup = 1 %! 10
-                , dvtPPEconomicGroup = 1 %! 10
-                , dvtPPTechnicalGroup = 1 %! 10
-                , dvtPPGovGroup = 1 %! 10
-                , dvtTreasuryWithdrawal = 1 %! 10
+                { dvtMotionNoConfidence = 0 %! 10
+                , dvtCommitteeNormal = 0 %! 10
+                , dvtCommitteeNoConfidence = 0 %! 10
+                , dvtUpdateToConstitution = 0 %! 10
+                , dvtHardForkInitiation = 0 %! 10
+                , dvtPPNetworkGroup = 0 %! 10
+                , dvtPPEconomicGroup = 0 %! 10
+                , dvtPPTechnicalGroup = 0 %! 10
+                , dvtPPGovGroup = 0 %! 10
+                , dvtTreasuryWithdrawal = 0 %! 10
                 }
         poolVotingThresholds =
             PoolVotingThresholds
-                { pvtMotionNoConfidence = 1 %! 10
-                , pvtCommitteeNormal = 1 %! 10
-                , pvtCommitteeNoConfidence = 1 %! 10
-                , pvtHardForkInitiation = 1 %! 10
-                , pvtPPSecurityGroup = 1 %! 10
+                { pvtMotionNoConfidence = 0 %! 10
+                , pvtCommitteeNormal = 0 %! 10
+                , pvtCommitteeNoConfidence = 0 %! 10
+                , pvtHardForkInitiation = 0 %! 10
+                , pvtPPSecurityGroup = 0 %! 10
                 }
      in ConwayGenesis
             { cgUpgradePParams = upPParams

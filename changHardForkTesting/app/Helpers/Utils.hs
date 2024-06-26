@@ -10,6 +10,8 @@ import Cardano.Ledger.Conway.Governance qualified as CG
 import Control.Lens.Getter ((^.))
 import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.ByteString.Lazy qualified as LBS
+import Data.Foldable
 import Data.Functor (void)
 import Data.List (intersperse)
 import Data.Time.Clock.POSIX qualified as Time
@@ -22,6 +24,7 @@ import Hedgehog.Extras qualified as HE
 import Hedgehog.Extras.Stock.CallStack qualified as H
 import Helpers.Common (makeAddress)
 import Helpers.PlutusScripts (mintScriptWitness', plutusL3, toScriptData)
+import Helpers.Query qualified as Q
 import System.Directory qualified as IO
 import System.Environment qualified as IO
 import System.IO qualified as IO
@@ -122,3 +125,27 @@ getPrevGovAction oldGovState = do
     GovPurpose prevUpdateCommittee prevPParamUpdate prevHardFork prevConstitution
 
 addEpoch e i = L.EpochNo $ L.unEpochNo e + i
+
+getGovStateJson :: (MonadTest m, MonadIO m) => FilePath -> C.LocalNodeConnectInfo -> m ()
+getGovStateJson filePath localNodeConnectInfo = do
+    govState <- Q.getConwayGovernanceState localNodeConnectInfo
+    let govStateString = C.prettyPrintJSON govState
+    liftIO $ LBS.writeFile filePath (LBS.fromStrict govStateString)
+
+getEnactedGovAction :: (MonadTest m, MonadIO m) => C.LocalNodeConnectInfo -> m (CG.GovActionId L.StandardCrypto)
+getEnactedGovAction localNodeConnectInfo = do
+    govState <- Q.getConwayGovernanceState localNodeConnectInfo
+    let enactedGovActionId =
+            ( ( head $
+                    toList
+                        ( ( snd $
+                                CG.finishDRepPulser $
+                                    govState
+                                        ^. CG.cgsDRepPulsingStateL
+                          )
+                            ^. CG.rsEnactedL
+                        )
+              )
+                ^. CG.gasIdL
+            )
+    return $ enactedGovActionId
