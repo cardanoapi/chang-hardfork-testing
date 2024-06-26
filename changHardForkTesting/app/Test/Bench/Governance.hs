@@ -614,9 +614,11 @@ multipleCommitteeProposalAndVoteTest
 
         liftIO $ threadDelay 2_000_000
         newGovState <- Q.getConwayGovernanceState localNodeConnectInfo
-        let newEnactState = CG.mkEnactState newGovState
-            newCommittee = CG.ensCommittee newEnactState
-            newCommitteeMembers = CG.committeeMembers (fromJust $ strictMaybeToMaybe newCommittee)
+        let newCommitteeMembers =
+                CG.committeeMembers $
+                    fromJust $
+                        strictMaybeToMaybe $
+                            CG.cgsCommittee newGovState
             committeeChanged = newConstitutionalCommittee == newCommitteeMembers
             newGovStateJson = C.prettyPrintJSON newGovState
         newGovStateFile <- pure $ LBS.writeFile ".govStateTracking/committee/newGovState.json" (LBS.fromStrict newGovStateJson)
