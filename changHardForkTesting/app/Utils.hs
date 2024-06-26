@@ -11,6 +11,8 @@ import Cardano.Api qualified as C
 import Cardano.Api.Shelley hiding (Mainnet)
 import Data.ByteString qualified as BS
 import Data.ByteString.Short (ShortByteString)
+import Data.Kind (Type)
+import Debug.Trace qualified as Debug
 import Helpers.Common (makeAddressWithStake)
 import PlutusLedgerApi.Common
 import PlutusLedgerApi.V1.Bytes qualified as P
@@ -68,3 +70,6 @@ v2ScriptInfo netId compiledCode = do
         address = makeAddressWithStake (Right hash) Nothing netId
         info = V2ScriptInfo address script hash sbs
     info
+
+consoleLog :: forall (f :: Type -> Type). (Applicative f) => String -> f ()
+consoleLog str = Debug.traceM (str)

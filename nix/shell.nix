@@ -27,7 +27,7 @@ in
   preCommit = {
     cabal-fmt.enable = true;
     nixpkgs-fmt.enable = true;
-    shellcheck.enable = true;
+    shellcheck.enable = false;
     editorconfig-checker.enable = true;
     hlint.enable = false;
     fourmolu.enable = true;

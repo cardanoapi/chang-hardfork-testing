@@ -33,7 +33,7 @@ mkValidator params dat red txInfoSignaories = signed
     activeSigners = mapMaybe (\x -> if x `elem` totalSigners then Just x else Nothing) txSigners
     signed = length activeSigners >= requiredSigners
 
-mkWrappedValidator :: MultiSigParams -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+mkWrappedValidator :: MultiSigParams -> BuiltinData -> BuiltinData -> BuiltinData -> BuiltinUnit
 mkWrappedValidator msp dat_ red_ ctx_ = check $ mkValidator msp (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData txSigners)
   where
     ds :: BuiltinData -> BI.BuiltinList BuiltinData
@@ -55,5 +55,5 @@ mkWrappedValidator msp dat_ red_ ctx_ = check $ mkValidator msp (unsafeFromBuilt
             $ BI.tail
             $ ds txInfo
 
-validator :: MultiSigParams -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: MultiSigParams -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> BuiltinUnit)
 validator params = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion100 params

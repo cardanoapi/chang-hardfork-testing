@@ -10,6 +10,7 @@ module Helpers.Tx where
 import Cardano.Api (HashableScriptData)
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger qualified as L
+import Cardano.Api.Shelley (LedgerProtocolParameters (LedgerProtocolParameters))
 import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Conway.Governance qualified as Conway
 import Cardano.Ledger.Era qualified as C
@@ -20,7 +21,7 @@ import Data.Functor ((<&>))
 import Data.List (isInfixOf)
 import Data.Map qualified as Map
 import Data.OSet.Strict qualified as OSet
-import Data.Word (Word32)
+import Data.Word (Word16)
 import Debug.Trace qualified as Debug
 import GHC.Stack qualified as GHC
 import Hedgehog (MonadTest)
@@ -29,6 +30,7 @@ import Hedgehog.Extras.Test.Base qualified as H
 import Helpers.Common (toMaryEraOnwards, toShelleyBasedEra)
 import Helpers.Utils qualified as U
 import Ouroboros.Network.Protocol.LocalStateQuery.Type qualified as O
+import Utils (consoleLog)
 
 newtype SubmitError = SubmitError C.TxValidationErrorInCardanoMode
     deriving (Show)
@@ -263,7 +265,7 @@ buildTxVotingProcedures ::
     C.ShelleyBasedEra era ->
     C.ConwayEraOnwards era ->
     C.TxId -> -- action id
-    Word32 ->
+    Word16 ->
     [ ( L.Voter (C.EraCrypto (C.ShelleyLedgerEra era))
       , C.Vote
       , Maybe (C.ScriptWitness C.WitCtxStake era)
@@ -446,7 +448,7 @@ getTxExecutionUnits era localNodeConnectInfo tx = do
             , _
             ) =
                 U.unsafeFromRight $ U.unsafeFromRight localStateQueryResult
-        eitherExUnits =
+    let eitherExUnits =
             C.evaluateTransactionExecutionUnits
                 era
                 systemStart
@@ -456,7 +458,7 @@ getTxExecutionUnits era localNodeConnectInfo tx = do
                 tx
         exUnits = pure (memSum, stepSum)
           where
-            exUnitList = map (U.unsafeFromRight . snd) $ Map.toList $ U.unsafeFromRight eitherExUnits
+            exUnitList = map (snd . U.unsafeFromRight . snd) $ Map.toList $ U.unsafeFromRight eitherExUnits
             memSum = foldr (\x acc -> acc + (toInteger $ C.executionMemory x)) 0 exUnitList
             stepSum = foldr (\x acc -> acc + (toInteger $ C.executionSteps x)) 0 exUnitList
     exUnits

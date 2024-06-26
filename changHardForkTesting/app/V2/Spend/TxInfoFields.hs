@@ -61,7 +61,7 @@ mkValidator fields dat red inputs outputs refInputs mint range signatories fee =
     isAfter = afterRange fields `after` range
     hasSignatures = all (\x -> x `elem` signatories) (nub $ signers fields)
 
-mkWrappedValidator :: TxInfoFields -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+mkWrappedValidator :: TxInfoFields -> BuiltinData -> BuiltinData -> BuiltinData -> BuiltinUnit
 mkWrappedValidator fields dat_ red_ ctx_ =
     check
         $ mkValidator
@@ -101,5 +101,5 @@ mkWrappedValidator fields dat_ red_ ctx_ =
             $ BI.tail
             $ ds txInfo
 
-validator :: TxInfoFields -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: TxInfoFields -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> BuiltinUnit)
 validator fields = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion100 fields

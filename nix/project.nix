@@ -1,7 +1,7 @@
 { repoRoot, inputs, pkgs, lib, system }:
 
 let
-  cardano-node-gitrev = "235e34f6df9a1490190f6247b610b4e114ca3b96";
+  cardano-node-gitrev = "ae8bc933ee6b6366c04854c1e127fd8dfb29b556";
 
 
   cabalProject' = pkgs.haskell-nix.cabalProject' ({ config, pkgs, ... }:
@@ -16,7 +16,7 @@ let
       shell.withHoogle = false;
 
       sha256map = {
-        "https://github.com/IntersectMBO/cardano-node"."${cardano-node-gitrev}" = "sha256-teLUo4cQ9H52EkmJ9uXOIuyI78DtrKWxflJm+BnBqlM=";
+        "https://github.com/IntersectMBO/cardano-node"."${cardano-node-gitrev}" = "sha256-//1Tgd0ZFWMca2CDx/SPxencvTbn9/qd3bu/bqa98c0=";
       };
 
       inputMap = {

@@ -5,7 +5,7 @@ module Test.V3.DummyDataTypes where
 import Helpers.PlutusScripts (bytesFromHex)
 import PlutusLedgerApi.V3 (PubKeyHash (..))
 import PlutusTx.Builtins
-import PlutusTx.Builtins.Class qualified as BI
+import PlutusTx.Builtins qualified as BI
 import V3.Spend.VerifyBLS12G1 qualified as VerifyBLS12G1
 import V3.Spend.VerifyBLS12G2 qualified as VerifyBLS12G2
 import V3.Spend.VerifyEcdsa qualified as VerifyEcdsa

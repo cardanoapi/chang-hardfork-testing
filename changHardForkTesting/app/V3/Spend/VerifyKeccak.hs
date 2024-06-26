@@ -42,8 +42,15 @@ mkValidator prefix eAddress Redeem{..} ctx =
         parityByte = if parityY == 0 then 2 else 3
     sig = sliceByteString 0 64 signature
 
-mkWrappedValidator :: BuiltinByteString -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator prefix dat_ red_ ctx_ = check $ mkValidator prefix (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
+mkWrappedValidator :: BuiltinByteString -> BuiltinData -> BuiltinUnit
+mkWrappedValidator prefix ctx_ = check $ mkValidator prefix (unsafeFromBuiltinData datum) (unsafeFromBuiltinData redeemer) scriptContext
+  where
+    scriptContext :: ScriptContext = unsafeFromBuiltinData ctx_
+    redeemer = getRedeemer $ scriptContextRedeemer scriptContext
+    datum = case scriptContextScriptInfo scriptContext of
+        SpendingScript _ dat -> case dat of
+            Just dat_ -> getDatum dat_
+            Nothing -> traceError "Script input has no datum"
 
-validator :: BuiltinByteString -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: BuiltinByteString -> PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator prefix = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 prefix

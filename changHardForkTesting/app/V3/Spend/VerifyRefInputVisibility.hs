@@ -25,8 +25,8 @@ expectSingle list = case list of
     _ -> traceError "expected single element in list"
 
 {-# INLINEABLE mkValidator #-}
-mkValidator :: RefInputConfig -> () -> ScriptContext -> Bool
-mkValidator dat red ctx = verifyDatumVisible && verifyValueVisible && verifyAddressVisible
+mkValidator :: RefInputConfig -> ScriptContext -> Bool
+mkValidator dat ctx = verifyDatumVisible && verifyValueVisible && verifyAddressVisible
   where
     info = scriptContextTxInfo ctx
     referenceInput = txInInfoResolved $ expectSingle $ txInfoReferenceInputs info
@@ -42,8 +42,14 @@ mkValidator dat red ctx = verifyDatumVisible && verifyValueVisible && verifyAddr
     verifyValueVisible = refInputValue == (value dat)
     verifyAddressVisible = refInputAddress == (address dat)
 
-mkWrappedValidator :: BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator dat_ red_ ctx_ = check $ mkValidator (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
+mkWrappedValidator :: BuiltinData -> BuiltinUnit
+mkWrappedValidator ctx_ = check $ mkValidator (unsafeFromBuiltinData datum) scriptContext
+  where
+    scriptContext :: ScriptContext = unsafeFromBuiltinData ctx_
+    datum = case scriptContextScriptInfo scriptContext of
+        SpendingScript _ dat -> case dat of
+            Just dat -> getDatum dat
+            Nothing -> traceError "Script input has no datum"
 
-validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator = $$(PlutusTx.compile [||mkWrappedValidator||])

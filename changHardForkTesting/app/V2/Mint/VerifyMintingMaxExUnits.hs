@@ -27,7 +27,7 @@ mkValidator txIn _ inputsInfo mint = mustMintNFT && hasInput
         _ -> traceError "Must mint a single NFT"
     hasInput = txIn `elem` inputs
 
-mkWrappedValidator :: TxOutRef -> BuiltinData -> BuiltinData -> ()
+mkWrappedValidator :: TxOutRef -> BuiltinData -> BuiltinData -> BuiltinUnit
 mkWrappedValidator input red_ ctx_ = check $ mkValidator input (unsafeFromBuiltinData red_) (unsafeFromBuiltinData txInputs) (unsafeFromBuiltinData txMint)
   where
     ds :: BuiltinData -> BI.BuiltinList BuiltinData
@@ -41,5 +41,5 @@ mkWrappedValidator input red_ ctx_ = check $ mkValidator input (unsafeFromBuilti
 
     txMint = BI.head $ BI.tail $ BI.tail $ BI.tail $ BI.tail $ ds txInfo
 
-validator :: TxOutRef -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> ())
+validator :: TxOutRef -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinUnit)
 validator input = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion100 input

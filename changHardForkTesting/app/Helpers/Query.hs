@@ -10,6 +10,7 @@
 
 module Helpers.Query where
 
+import Cardano.Api (queryStakeAddresses)
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley qualified as C
@@ -28,6 +29,7 @@ import Hedgehog.Extras.Test qualified as HE
 import Hedgehog.Extras.Test.Base qualified as H
 import Helpers.Common (toShelleyBasedEra)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type qualified as O
+import Utils (consoleLog)
 
 -- | Find the first UTxO at address and return as TxIn. Used for txbody's txIns.
 firstTxIn ::
@@ -259,19 +261,22 @@ waitForNextEpoch ::
     String -> -- temp debug text for intermittent timeout failure
     C.EpochNo ->
     m C.EpochNo
-waitForNextEpoch era localNodeConnectInfo debugStr prevEpochNo = go (300 :: Int) -- 300 second timeout
-  where
-    go 0 = error $ "waitForNextEpoch timeout. \n-- Debug --\nTest function: " ++ debugStr
-    go i = do
-        currentEpochNo <- getCurrentEpoch era localNodeConnectInfo
-        case (toInteger $ C.unEpochNo currentEpochNo) - (toInteger $ C.unEpochNo prevEpochNo) of
-            0 -> do
-                liftIO $ threadDelay 1000000 -- 1s
-                go (pred i)
-            1 -> return currentEpochNo
-            diff
-                | diff > 1 -> error "Current epoch is more than 1 epoch beyond the previous epoch"
-                | otherwise -> error "Current epoch is less than the previous epoch"
+waitForNextEpoch era localNodeConnectInfo debugStr prevEpochNo = do
+    consoleLog ("Running " ++ debugStr)
+    let epoch = go (300 :: Int) -- 300 second timeout
+          where
+            go 0 = error $ "waitForNextEpoch timeout. \n-- Debug --\nTest function: " ++ debugStr
+            go i = do
+                currentEpochNo <- getCurrentEpoch era localNodeConnectInfo
+                case (toInteger $ C.unEpochNo currentEpochNo) - (toInteger $ C.unEpochNo prevEpochNo) of
+                    0 -> do
+                        liftIO $ threadDelay 1000000 -- 1s
+                        go (pred i)
+                    1 -> return currentEpochNo
+                    diff
+                        | diff > 1 -> error "Current epoch is more than 1 epoch beyond the previous epoch"
+                        | otherwise -> error "Current epoch is less than the previous epoch"
+    epoch
 
 waitForNextEpoch_ ::
     (MonadIO m, MonadTest m) =>
@@ -339,10 +344,90 @@ getConwayGovernanceState localNodeConnectInfo =
         $ C.QueryInEra
         $ C.QueryInShelleyBasedEra (C.ShelleyBasedEraConway) C.QueryGovState
 
-getGovStateInAnyEra era localNodeConnectInfo =
+getStakePools era localNodeConnectInfo =
     H.leftFailM
         . H.leftFailM
         . liftIO
         $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
         $ C.QueryInEra
-        $ C.QueryInShelleyBasedEra era C.QueryGovState
+        $ C.QueryInShelleyBasedEra era C.QueryStakePools
+
+getDrepState ceo localNodeConnectInfo drep =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryDRepState drep)
+
+getDrepStakeDistribution ceo localNodeConnectInfo drep =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryDRepStakeDistr drep)
+
+getPoolState ceo localNodeConnectInfo poolId =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryPoolState poolId)
+
+getPoolDistriubution ceo localNodeConnectInfo poolId =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryPoolDistribution poolId)
+
+getStakeAddresses ceo localNodeConnectInfo stakeCred netId =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryStakeAddresses stakeCred netId)
+
+getStakeDelegDeposits ceo localNodeConnectInfo stakeCred =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryStakeDelegDeposits stakeCred)
+
+getStakeDistribution ceo localNodeConnectInfo =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryStakeDistribution)
+
+getStakePoolParameters ceo localNodeConnectInfo poolId =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryStakePoolParameters poolId)
+
+getCommitteeMembersState ceo localNodeConnectInfo coldKey hotKey status =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryCommitteeMembersState coldKey hotKey status)
+
+getStakeVoteDelegatees ceo localNodeConnectInfo stakeCred =
+    H.leftFailM
+        . H.leftFailM
+        . liftIO
+        $ C.queryNodeLocalState localNodeConnectInfo O.VolatileTip
+        $ C.QueryInEra
+        $ C.QueryInShelleyBasedEra ceo (C.QueryStakeVoteDelegatees stakeCred)

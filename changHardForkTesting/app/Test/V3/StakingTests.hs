@@ -20,6 +20,7 @@ import Helpers.TestData (TestInfo (..), TestParams (..))
 import Helpers.Testnet qualified as TN
 import Helpers.Tx qualified as Tx
 import Helpers.Utils (addEpoch)
+import Utils (consoleLog)
 
 -- mutiple stake address registration
 verifyMultipleStakeAddressRegistrationTestInfo :: [Staking era] -> TestInfo era
@@ -83,7 +84,7 @@ verifyMultipleStakeAddressRegistrationTest
         stakeDelegResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show stakeDelegResultTxOut
-        Debug.traceM ((show (length staking)) ++ " Stake Addresses registered")
+        consoleLog ((show (length staking)) ++ " Stake Addresses registered")
         return Nothing
 
 -- register multiple stake pool
@@ -111,9 +112,8 @@ verifyMultipleStakePoolRegistrationTest
             (w1SKey, _, w1Address) = skeyAndAddress !! 0
         sPRegTxIn <- Q.adaOnlyTxInAtAddress era localNodeConnectInfo w1Address
         let
-            stakePool1 = stakePool !! 0
-            stakePool2 = stakePool !! 1
-            stakePool3 = stakePool !! 2
+            spRegCerts = map (\sp -> sPRegCert sp) stakePool
+            spStakeCreds = map (\sp -> sPStakeCred sp) stakePool
             regSPTxOut = Tx.txOut era (C.lovelaceToValue 2_000_000) w1Address
             regSPTxBodyContent =
                 (Tx.emptyTxBodyContent sbe pparams)
@@ -121,31 +121,27 @@ verifyMultipleStakePoolRegistrationTest
                     , C.txCertificates =
                         Tx.txCertificates
                             era
-                            [(sPRegCert stakePool1), (sPRegCert stakePool2), (sPRegCert stakePool3)]
-                            [(sPStakeCred stakePool1), (sPStakeCred stakePool2), (sPStakeCred stakePool3)]
+                            spRegCerts
+                            spStakeCreds
                     , C.txOuts = [regSPTxOut]
                     }
+            spWitnessesPoolKey = map (\sp -> C.WitnessStakePoolKey (sPSKey sp)) stakePool
+            spWitnessStakeKey = map (\sp -> C.WitnessStakeKey (sPRewardKey sp)) stakePool
+            totalWitnesses = fromIntegral (length (spWitnessesPoolKey ++ spWitnessStakeKey) + 1)
         signedRegSPTx <-
             Tx.buildTxWithWitnessOverride
                 era
                 localNodeConnectInfo
                 regSPTxBodyContent
                 w1Address
-                (Just 7)
-                [ C.WitnessPaymentKey w1SKey
-                , C.WitnessStakePoolKey (sPSKey stakePool1)
-                , C.WitnessStakePoolKey (sPSKey stakePool2)
-                , C.WitnessStakePoolKey (sPSKey stakePool3)
-                , C.WitnessStakeKey (sPRewardKey stakePool1)
-                , C.WitnessStakeKey (sPRewardKey stakePool2)
-                , C.WitnessStakeKey (sPRewardKey stakePool3)
-                ]
+                (Just totalWitnesses)
+                ([C.WitnessPaymentKey w1SKey] ++ spWitnessStakeKey ++ spWitnessesPoolKey)
         Tx.submitTx sbe localNodeConnectInfo signedRegSPTx
         let expTxIn = Tx.txIn (Tx.txId signedRegSPTx) 0
         regStakePoolResultTxOut <-
             Q.getTxOutAtAddress era localNodeConnectInfo w1Address expTxIn "getTxOutAtAddress"
         H.annotate $ show regStakePoolResultTxOut
-        Debug.traceM ((show (length stakePool)) ++ " Stake Pools registered")
+        consoleLog ((show (length stakePool)) ++ " Stake Pools registered")
         return Nothing
 
 -- delegation to multiple stake pools in a single transaction

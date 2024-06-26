@@ -119,14 +119,14 @@ verifyV3MintingEfficiencyTest networkOptions TestParams{localNodeConnectInfo, pp
     v2SignedTx <- Tx.buildTx era localNodeConnectInfo v2TxBodyContent w1Address [w1SKey]
     (v3Mem, v3Steps) <- Tx.getTxExecutionUnits era localNodeConnectInfo (C.getTxBody v3SignedTx)
     (v2Mem, v2Steps) <- Tx.getTxExecutionUnits era localNodeConnectInfo (C.getTxBody v2SignedTx)
-    Debug.traceM ("V3 Ex Units: " ++ show (v3Mem, v3Steps))
-    Debug.traceM ("V2 Ex Units: " ++ show (v2Mem, v2Steps))
+    consoleLog ("V3 Ex Units: " ++ show (v3Mem, v3Steps))
+    consoleLog ("V2 Ex Units: " ++ show (v2Mem, v2Steps))
     let memEfficiency = ((v2Mem - v3Mem) * 100) `div` v2Mem
         stepEfficiency = ((v2Steps - v3Steps) * 100) `div` v2Steps
-    Debug.traceM ("ExecutionMemory is " ++ (show memEfficiency) ++ "% efficient")
-    Debug.traceM ("ExecutionSteps is " ++ (show stepEfficiency) ++ "% efficient")
-    Debug.traceM ("V3 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v3sbs verifyMaxExUnitsMintingInfoV3)))
-    Debug.traceM ("V2 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v2sbs verifyMaxExUnitsMintingInfoV2)))
+    consoleLog ("ExecutionMemory is " ++ (show memEfficiency) ++ "% efficient")
+    consoleLog ("ExecutionSteps is " ++ (show stepEfficiency) ++ "% efficient")
+    consoleLog ("V3 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v3sbs verifyMaxExUnitsMintingInfoV3)))
+    consoleLog ("V2 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v2sbs verifyMaxExUnitsMintingInfoV2)))
     Helpers.Test.assert "V3 is efficient" (v3Mem < v2Mem && v3Steps < v2Steps)
 
 verifyV3MultiSigEfficiencyTestInfo :: TestInfo era
@@ -200,7 +200,7 @@ verifyV3MultiSigEfficiencyTest networkOptions TestParams{localNodeConnectInfo, p
                 }
     signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w2Address [w2SKey, w3SKey]
     (v3Mem, v3Steps) <- Tx.getTxExecutionUnits era localNodeConnectInfo (C.getTxBody signedTx)
-    Debug.traceM ("V2 Ex Units: " ++ show (v3Mem, v3Steps))
+    consoleLog ("V3 Ex Units: " ++ show (v3Mem, v3Steps))
     let v2scriptTxOut =
             Tx.txOutWithInlineDatum
                 era
@@ -240,13 +240,13 @@ verifyV3MultiSigEfficiencyTest networkOptions TestParams{localNodeConnectInfo, p
                 }
     signedTx <- Tx.buildTx era localNodeConnectInfo txBodyContent w3Address [w2SKey, w3SKey]
     (v2Mem, v2Steps) <- Tx.getTxExecutionUnits era localNodeConnectInfo (C.getTxBody signedTx)
-    Debug.traceM ("V2 Ex Units: " ++ show (v2Mem, v2Steps))
+    consoleLog ("V2 Ex Units: " ++ show (v2Mem, v2Steps))
     let memEfficiency = ((v2Mem - v3Mem) * 100) `div` v2Mem
         stepEfficiency = ((v2Steps - v3Steps) * 100) `div` v2Steps
-    Debug.traceM ("ExecutionMemory is " ++ (show memEfficiency) ++ "% efficient")
-    Debug.traceM ("ExecutionSteps is " ++ (show stepEfficiency) ++ "% efficient")
-    Debug.traceM ("V3 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v3sbs v3multisigScriptInfo)))
-    Debug.traceM ("V2 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v2sbs v2multisigScriptInfo)))
+    consoleLog ("ExecutionMemory is " ++ (show memEfficiency) ++ "% efficient")
+    consoleLog ("ExecutionSteps is " ++ (show stepEfficiency) ++ "% efficient")
+    consoleLog ("V3 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v3sbs v3multisigScriptInfo)))
+    consoleLog ("V2 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v2sbs v2multisigScriptInfo)))
     Helpers.Test.assert "V3 is efficient" (v3Mem < v2Mem && v3Steps < v2Steps)
 
 verifyV3TxInfoFieldsTestInfo :: TestInfo era
@@ -435,14 +435,14 @@ verifyV3TxInfoFieldsTest networkOptions TestParams{localNodeConnectInfo, pparams
                 }
     v3SignedTx <- Tx.buildTx era localNodeConnectInfo v3TxBodyContent w3Address [w3SKey]
     (v3Mem, v3Steps) <- Tx.getTxExecutionUnits era localNodeConnectInfo (C.getTxBody v3SignedTx)
-    Debug.traceM ("V3 Ex Units: " ++ show (v3Mem, v3Steps))
+    consoleLog ("V3 Ex Units: " ++ show (v3Mem, v3Steps))
     v2SignedTx <- Tx.buildTx era localNodeConnectInfo v2TxBodyContent w3Address [w3SKey]
     (v2Mem, v2Steps) <- Tx.getTxExecutionUnits era localNodeConnectInfo (C.getTxBody v2SignedTx)
-    Debug.traceM ("V2 Ex Units: " ++ show (v2Mem, v2Steps))
+    consoleLog ("V2 Ex Units: " ++ show (v2Mem, v2Steps))
     let memEfficiency = ((v2Mem - v3Mem) * 100) `div` v2Mem
         stepEfficiency = ((v2Steps - v3Steps) * 100) `div` v2Steps
-    Debug.traceM ("ExecutionMemory is " ++ (show memEfficiency) ++ "% efficient")
-    Debug.traceM ("ExecutionSteps is " ++ (show stepEfficiency) ++ "% efficient")
-    Debug.traceM ("V3 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v3sbs v3TxInfo)))
-    Debug.traceM ("V2 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v2sbs v2TxInfo)))
+    consoleLog ("ExecutionMemory is " ++ (show memEfficiency) ++ "% efficient")
+    consoleLog ("ExecutionSteps is " ++ (show stepEfficiency) ++ "% efficient")
+    consoleLog ("V3 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v3sbs v3TxInfo)))
+    consoleLog ("V2 Script Size: " ++ (show $ length $ BS8.unpack (fromShort $ v2sbs v2TxInfo)))
     Helpers.Test.assert "V3 is efficient" (v3Mem < v2Mem && v3Steps < v2Steps)

@@ -28,6 +28,7 @@ import Test.Tasty.Hedgehog (testProperty)
 import Test.V3.EfficiencyTests
 import Test.V3.PlutusTests
 import Test.V3.StakingTests
+import Test.V3.Testnet (clusterFilePath)
 import Text.XML.Light.Output
 import Prelude hiding (mapM)
 
@@ -113,6 +114,9 @@ spendingTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> d
         , run verifyLockingAndSpendingInDifferentScriptTestInfo
         , run verifyMultiSigRequirementTestInfo
         ]
+    failureMessages <- liftIO $ suiteFailureMessages resultsRef
+    liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
+    U.anyLeftFail_ $ TN.cleanupTestnet mPoolNodes
 
 mintingTests :: IORef [TestResult] -> H.Property
 mintingTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
@@ -124,6 +128,9 @@ mintingTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
         [run verifyMaxExUnitsMintingTestInfo]
+    failureMessages <- liftIO $ suiteFailureMessages resultsRef
+    liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
+    U.anyLeftFail_ $ TN.cleanupTestnet mPoolNodes
 
 referenceInputTests :: IORef [TestResult] -> H.Property
 referenceInputTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
@@ -135,47 +142,57 @@ referenceInputTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPat
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
         [run verifyReferenceInputVisibilityTestInfo]
+    failureMessages <- liftIO $ suiteFailureMessages resultsRef
+    liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
+    U.anyLeftFail_ $ TN.cleanupTestnet mPoolNodes
 
 pv9GovernanceBenchmark :: IORef [TestResult] -> H.Property
 pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
-    let options = TN.testnetOptionsConway9Governance
+    let options = TN.localNodeOptionsConway
         ceo = toConwayEraOnwards $ TN.eraFromOptions options
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
-        TN.setupTestEnvironment options tempAbsPath
+        TN.setupTestEnvironment options clusterFilePath
     preTestnetTime <- liftIO Time.getCurrentTime
     shelleyWallets <- generateShelleyWallet
     dReps <- generateDRepKeyCredentialsAndCertificate ceo
     ccMembers <- generateCommitteeKeysAndCertificate ceo
-    stakePools <- mapM id $ take 3 $ repeat $ generateStakePoolKeyCredentialsAndCertificate ceo networkId
-    let testParams = TestParams localNodeConnectInfo pparams networkId tempAbsPath (Just preTestnetTime)
+    stakePools <- mapM id $ take 6 $ repeat $ generateStakePoolKeyCredentialsAndCertificate ceo networkId
+    let testParams = TestParams localNodeConnectInfo pparams networkId clusterFilePath (Just preTestnetTime)
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
         [ -- commenting this one out for now, because it takes a lot of time
-          --   run $ fundShelleyWalletsTestInfo shelleyWallets
           run $ registerShelleyWalletsTestInfo shelleyWallets
+        , run $ fundShelleyWalletsTestInfo shelleyWallets
         , run $ registerDrepsInfo dReps
         , run $ registerCCMembersInfo ccMembers
         , run $ verifyMultipleStakePoolRegistrationTestInfo stakePools
         , run $ delegateAdaHolderToDRepsTestInfo shelleyWallets dReps
         , run $ delegateAdaHolderToStakePoolsTestInfo shelleyWallets stakePools
-        , run $ multipleConstitutionProposalAndVotesTestInfo ccMembers dReps shelleyWallets
         , run $ multipleCommitteeProposalAndVoteTestInfo ccMembers dReps shelleyWallets stakePools
+        , run $ multipleConstitutionProposalAndVotesTestInfo ccMembers dReps shelleyWallets
         , run $ multipleNoConfidenceProposalAndVoteTestInfo dReps shelleyWallets stakePools
         , run $ multiplePrameterChangeProposalAndVoteTestInfo ccMembers dReps shelleyWallets
         , run $ multipleTreasuryWithdrawalProposalAndVoteTestInfo ccMembers dReps shelleyWallets
         , run $ multipleInfoProposalAndVoteTestInfo ccMembers dReps shelleyWallets stakePools
         ]
+    failureMessages <- liftIO $ suiteFailureMessages resultsRef
+    liftIO $ putStrLn $ "\nNumber of test failures in suite: " ++ (show $ length failureMessages)
+    U.anyLeftFail_ $ TN.cleanupTestnet mPoolNodes
 
 tests :: ResultsRefs -> TestTree
 tests ResultsRefs{..} =
     testGroup
         "Plutus E2E Tests"
-        [ --     testProperty "Plutus V3 Tests" (plutusV3Tests plutusV3ResultsRef)
-          -- , testProperty "Spending V3 Script Tests" (spendingTests spendingResultsRef)
-          -- , testProperty "Reference Input Tests" (referenceInputTests referenceInputResultsRef)
-          -- , testProperty "Minting Tests" (mintingTests mintingResultsRef)
-          -- , testProperty "PlutusV3 Efficiency Tests" (efficiencyTests efficiencyResultsRef)
-          -- , testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
+        [ -- TODO: There are problem with running these tests with the latest conway genesis.
+          -- CTN.defaultConwayGenesis returns 0 for all cost models
+          -- tests can be run in older version: https://github.com/cardanoapi/chang-hardfork-testing/tree/b378b7c49992d9818eecebc00a97526e12de10c3
+          -----------------------------------------------------------------------------------------------
+          -- testProperty "Plutus V3 Tests" (plutusV3Tests plutusV3ResultsRef)
+          -- testProperty "Minting Tests" (mintingTests mintingResultsRef)
+          -- testProperty "Staking and Pool Operations Tests" (stakingTests stakingResultsRef)
+          -----------------------------------------------------------------------------------------------
+          --     testProperty "Spending V3 Script Tests" (spendingTests spendingResultsRef)
+          --   , testProperty "Reference Input Tests" (referenceInputTests referenceInputResultsRef)
           testProperty "Governance Actions Benchmark Tests" (pv9GovernanceBenchmark governanceBenchmarkResultsRef)
         ]
 

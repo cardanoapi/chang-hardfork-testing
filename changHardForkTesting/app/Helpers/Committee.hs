@@ -14,8 +14,9 @@ import Data.Maybe (fromJust)
 
 data Committee era = Committee
     { committeeColdSKey :: C.SigningKey C.CommitteeColdKey
-    , commiteeColdVKey :: C.VerificationKey C.CommitteeColdKey
+    , commiteeColdVKey :: C.VerificationKey C.CommitteeHotKey
     , committeeColdKeyHash :: C.Hash C.CommitteeColdKey
+    , committeeHotHash :: C.Hash C.CommitteeHotKey
     , committeeHotSKey :: C.SigningKey C.CommitteeHotKey
     , committeeHotKeyAuthCert :: C.Certificate era
     , committeeVoter :: C.Voter (C.EraCrypto (C.ShelleyLedgerEra era))
@@ -37,8 +38,9 @@ generateCommitteeKeysAndCertificate ceo = do
                     C.getVerificationKey coldSKey
                 committeeColdHash = C.verificationKeyHash committeeColdVerificationKey
 
-                _committeeHotVerificationKey@(C.CommitteeHotVerificationKey committeeHotVKey) =
+                committeeHotVerificationKey@(C.CommitteeHotVerificationKey committeeHotVKey) =
                     C.getVerificationKey hotSKey
+                _committeeHotHash = C.verificationKeyHash committeeHotVerificationKey
                 -- Produce committee hot key authorization certificate
                 ckh = C.conwayEraOnwardsConstraints ceo $ L.KeyHashObj $ Keys.hashKey committeeColdVkey
                 hkh = C.conwayEraOnwardsConstraints ceo $ L.KeyHashObj $ Keys.hashKey committeeHotVKey
@@ -53,8 +55,9 @@ generateCommitteeKeysAndCertificate ceo = do
             return $
                 Committee
                     coldSKey
-                    committeeColdVerificationKey
+                    committeeHotVerificationKey
                     committeeColdHash
+                    _committeeHotHash
                     hotSKey
                     committeeHotKeyAuthCert
                     committeeVoter

@@ -29,8 +29,8 @@ data BLSRedeemer = BLSRedeemer
 PlutusTx.unstableMakeIsData ''BLSRedeemer
 
 {-# INLINEABLE mkValidator #-}
-mkValidator :: BLSDatum -> BLSRedeemer -> ScriptContext -> Bool
-mkValidator dat red ctx =
+mkValidator :: BLSDatum -> BLSRedeemer -> Bool
+mkValidator dat red =
     validateAdd
         && validateMult
         && validateNegative
@@ -60,8 +60,15 @@ mkValidator dat red ctx =
     datumNegativePoint1 = bls12_381_G2_neg datumPoint1
     datumNegativePoint2 = bls12_381_G2_neg datumPoint2
 
-mkWrappedValidator :: BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator dat_ red_ ctx_ = check $ mkValidator (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
+mkWrappedValidator :: BuiltinData -> BuiltinUnit
+mkWrappedValidator ctx_ = check $ mkValidator (unsafeFromBuiltinData datum) (unsafeFromBuiltinData redeemer)
+  where
+    scriptContext :: ScriptContext = unsafeFromBuiltinData ctx_
+    redeemer = getRedeemer $ scriptContextRedeemer scriptContext
+    datum = case scriptContextScriptInfo scriptContext of
+        SpendingScript _ dat -> case dat of
+            Just dat_ -> getDatum dat_
+            Nothing -> traceError "Script input has no datum"
 
-validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator = $$(PlutusTx.compile [||mkWrappedValidator||])

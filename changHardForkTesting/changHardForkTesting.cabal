@@ -87,6 +87,7 @@ executable changHardForkTesting
     Test.V3.EfficiencyTests
     Test.V3.PlutusTests
     Test.V3.StakingTests
+    Test.V3.Testnet
     Test.V3.TestTree
     Utils
     V2.Mint.VerifyMintingMaxExUnits
@@ -137,6 +138,7 @@ executable changHardForkTesting
     , lens
     , lucid
     , mtl
+    , optparse-applicative
     , ouroboros-network-protocols
     , plutus-core
     , plutus-ledger-api

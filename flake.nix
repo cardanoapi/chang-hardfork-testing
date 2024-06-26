@@ -15,17 +15,17 @@
     iohk-nix.follows = "iogx/iohk-nix";
 
     hackage = {
-      url = "github:input-output-hk/hackage.nix/45c962ae6bdf4274615aabcbe41c00c76d185ac5";
+      url = "github:input-output-hk/hackage.nix/3db1b82e4dbc6b44ddd5b98a88a6ea82be29efd5";
       flake = false;
     };
 
     CHaP = {
-      url = "github:input-output-hk/cardano-haskell-packages/501510e79f9cf76012cba0e86f88fa0b8b053fbd";
+      url = "github:intersectmbo/cardano-haskell-packages?ref=repo";
       flake = false;
     };
 
     haskell-nix = {
-      url = "github:input-output-hk/haskell.nix/c390991becb2a45a0963274e7924d3deaefcea29";
+      url = "github:input-output-hk/haskell.nix/34946405e89825c757aca192ab13a31313ccef8e";
       inputs.hackage.follows = "hackage";
     };
   };

@@ -15,11 +15,14 @@ import PlutusTx.Lift (liftCode)
 import PlutusTx.Prelude
 
 {-# INLINEABLE mkValidator #-}
-mkValidator :: Integer -> () -> Integer -> ScriptContext -> Bool
-mkValidator param dat red ctx = param == red
+mkValidator :: Integer -> Integer -> Bool
+mkValidator param red = param == red
 
-mkWrappedValidator :: Integer -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator param dat_ red_ ctx_ = check $ mkValidator param (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
+mkWrappedValidator :: Integer -> BuiltinData -> BuiltinUnit
+mkWrappedValidator param ctx_ = check $ mkValidator param (unsafeFromBuiltinData redeemer)
+  where
+    scriptContext :: ScriptContext = unsafeFromBuiltinData ctx_
+    redeemer = getRedeemer $ scriptContextRedeemer scriptContext
 
-validator :: Integer -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: Integer -> PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator param = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 param

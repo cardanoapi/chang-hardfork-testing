@@ -11,6 +11,8 @@ import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley
 import Cardano.Api.Shelley qualified as C
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.ByteString.Short (fromShort)
+import Data.ByteString.Short qualified as SBS
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Hedgehog hiding (test)
@@ -690,7 +692,10 @@ verifyMaxExUnitsMintingTest networkOptions TestParams{localNodeConnectInfo, ppar
     let mintedTxIn = Tx.txIn (Tx.txId signedTx) 0
     resultTxOut <- Q.getTxOutAtAddress era localNodeConnectInfo w1Address mintedTxIn "TN.getTxOutAtAddress"
     txOutHasValue <- Q.txOutHasValue resultTxOut (C.lovelaceToValue 4_000_000 <> tokenValues)
-    let efficiency = v3sbs verifyMaxExUnitsMintingInfoV3 < v2sbs verifyMaxExUnitsMintingInfoV2
+    let
+        v3ScriptLength = v3sbs verifyMaxExUnitsMintingInfoV3
+        v2ScriptLength = v2sbs verifyMaxExUnitsMintingInfoV2
+        efficiency = v3ScriptLength < v2ScriptLength
     Helpers.Test.assert "Tokens Minted" (txOutHasValue && efficiency)
 
 -- locking multiple UTxOs in the same script address in the same transaction

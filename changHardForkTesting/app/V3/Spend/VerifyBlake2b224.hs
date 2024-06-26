@@ -14,11 +14,18 @@ import PlutusTx.Prelude
 
 {-# INLINEABLE mkValidator #-}
 -- pubKeyHash -> pubKey -> context -> bool
-mkValidator :: BuiltinByteString -> BuiltinByteString -> ScriptContext -> Bool
-mkValidator dat red ctx = dat `equalsByteString` (blake2b_224 red)
+mkValidator :: BuiltinByteString -> BuiltinByteString -> Bool
+mkValidator dat red = dat `equalsByteString` (blake2b_224 red)
 
-mkWrappedValidator :: BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator dat_ red_ ctx_ = check $ mkValidator (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData ctx_)
+mkWrappedValidator :: BuiltinData -> BuiltinUnit
+mkWrappedValidator ctx_ = check $ mkValidator (unsafeFromBuiltinData datum) (unsafeFromBuiltinData redeemer)
+  where
+    scriptContext :: ScriptContext = unsafeFromBuiltinData ctx_
+    redeemer = getRedeemer $ scriptContextRedeemer scriptContext
+    datum = case scriptContextScriptInfo scriptContext of
+        SpendingScript _ dat -> case dat of
+            Just dat_ -> getDatum dat_
+            Nothing -> traceError "Script input has no datum"
 
-validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator = $$(PlutusTx.compile [||mkWrappedValidator||])

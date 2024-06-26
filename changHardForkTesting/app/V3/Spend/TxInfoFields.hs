@@ -61,8 +61,8 @@ mkValidator fields dat red inputs outputs refInputs mint range signatories fee =
     isAfter = afterRange fields `after` range
     hasSignatures = all (\x -> x `elem` signatories) (nub $ signers fields)
 
-mkWrappedValidator :: TxInfoFields -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator fields dat_ red_ ctx_ =
+mkWrappedValidator :: TxInfoFields -> BuiltinData -> BuiltinUnit
+mkWrappedValidator fields ctx_ =
     check
         $ mkValidator
             fields
@@ -80,7 +80,9 @@ mkWrappedValidator fields dat_ red_ ctx_ =
     ds bd = BI.snd (BI.unsafeDataAsConstr bd)
 
     context = ds ctx_
+    red_ = BI.head $ BI.tail context
 
+    dat_ = red_ -- TODO : Filter out datum from context
     txInfo = BI.head context
     inputs = BI.head $ ds txInfo
     refInputs = BI.head $ BI.tail $ ds txInfo
@@ -100,5 +102,5 @@ mkWrappedValidator fields dat_ red_ ctx_ =
             $ ds txInfo
     fee = BI.head $ BI.tail $ BI.tail $ BI.tail $ ds txInfo
 
-validator :: TxInfoFields -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: TxInfoFields -> PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator fields = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 fields

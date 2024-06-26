@@ -24,8 +24,8 @@ PlutusTx.unstableMakeIsData ''MultiSigParams
 PlutusTx.makeLift ''MultiSigParams
 
 {-# INLINEABLE mkValidator #-}
-mkValidator :: MultiSigParams -> () -> () -> [PubKeyHash] -> Bool
-mkValidator params dat red txInfoSignaories = signed
+mkValidator :: MultiSigParams -> [PubKeyHash] -> Bool
+mkValidator params txInfoSignaories = signed
   where
     requiredSigners = threshold params
     txSigners = nub $ txInfoSignaories
@@ -33,27 +33,11 @@ mkValidator params dat red txInfoSignaories = signed
     activeSigners = mapMaybe (\x -> if x `elem` totalSigners then Just x else Nothing) txSigners
     signed = length activeSigners >= requiredSigners
 
-mkWrappedValidator :: MultiSigParams -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-mkWrappedValidator msp dat_ red_ ctx_ = check $ mkValidator msp (unsafeFromBuiltinData dat_) (unsafeFromBuiltinData red_) (unsafeFromBuiltinData txSigners)
+mkWrappedValidator :: MultiSigParams -> BuiltinData -> BuiltinUnit
+mkWrappedValidator msp ctx_ = check $ mkValidator msp txSigners
   where
-    ds :: BuiltinData -> BI.BuiltinList BuiltinData
-    ds bd = BI.snd (BI.unsafeDataAsConstr bd)
+    scriptContext :: ScriptContext = unsafeFromBuiltinData ctx_
+    txSigners = txInfoSignatories $ scriptContextTxInfo scriptContext
 
-    context = ds ctx_
-
-    txInfo = BI.head context
-
-    txSigners =
-        BI.head
-            $ BI.tail
-            $ BI.tail
-            $ BI.tail
-            $ BI.tail
-            $ BI.tail
-            $ BI.tail
-            $ BI.tail
-            $ BI.tail
-            $ ds txInfo
-
-validator :: MultiSigParams -> PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
+validator :: MultiSigParams -> PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 validator params = $$(PlutusTx.compile [||mkWrappedValidator||]) `unsafeApplyCode` liftCode plcVersion110 params

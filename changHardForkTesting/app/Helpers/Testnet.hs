@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
@@ -15,6 +16,7 @@ import Cardano.Api (ConwayEraOnwards)
 import Cardano.Api qualified as C
 import Cardano.Api.Ledger (
     Coin (Coin),
+    CoinPerWord (..),
     Credential (KeyHashObj),
     EpochInterval (..),
     EraCrypto,
@@ -44,6 +46,17 @@ import Hedgehog.Extras.Stock.IO.Network.Sprocket qualified as IO
 import Hedgehog.Extras.Test qualified as H
 import Hedgehog.Extras.Test qualified as HE
 import Hedgehog.Extras.Test.Base qualified as H
+
+import Cardano.Api.Shelley (pshow)
+import Cardano.Api.Shelley qualified as Api
+import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis (..))
+import Cardano.Ledger.BaseTypes
+import Cardano.Ledger.Plutus qualified as L
+import Data.Bifunctor
+import Data.Int (Int64)
+import Data.Map qualified as Map
+import Data.Ratio
+import Data.Word
 import Helpers.Common (
     makeAddress,
     makeAddressWithStake,
@@ -69,6 +82,7 @@ import System.Process.Internals (
 import Testnet.Defaults qualified as CTN
 import Testnet.Runtime qualified as CTN
 import Testnet.Types qualified as CTN
+import Utils (consoleLog)
 
 data TestEnvironmentOptions era
     = TestnetOptions
@@ -138,6 +152,15 @@ shortEpochConwayTestnetOptions =
                 }
         }
 
+localNodeOptionsConway :: TestEnvironmentOptions C.ConwayEra
+localNodeOptionsConway =
+    LocalNodeOptions
+        { localNodeEra = C.ConwayEra
+        , localNodeProtocolVersion = 9
+        , localNodeEnvDir = "/home/reeshav/chang-hardfork-testing/.cluster"
+        , localNodeTestnetMagic = 42
+        }
+
 localNodeOptionsPreview :: TestEnvironmentOptions C.BabbageEra
 localNodeOptionsPreview =
     LocalNodeOptions
@@ -178,6 +201,298 @@ pvFromOptions (LocalNodeOptions _ pv _ _) = pure pv
 getProjectBase :: (MonadIO m, MonadTest m) => m String
 getProjectBase = liftIO . IO.canonicalizePath =<< HE.getProjectBase
 
+plutusV3CostModel :: Map.Map Word8 [Int64]
+plutusV3CostModel = Map.singleton 2 pv3CostModelInteger
+
+pv3CostModelInteger :: [Int64]
+pv3CostModelInteger =
+    -- These cost models are causing plutus v3 transactions to use a lot of execution units
+    [ 205665
+    , 812
+    , 1
+    , 1
+    , 1000
+    , 571
+    , 0
+    , 1
+    , 1000
+    , 24177
+    , 4
+    , 1
+    , 1000
+    , 32
+    , 117366
+    , 10475
+    , 4
+    , 23000
+    , 100
+    , 23000
+    , 100
+    , 23000
+    , 100
+    , 23000
+    , 100
+    , 23000
+    , 100
+    , 23000
+    , 100
+    , 100
+    , 100
+    , 23000
+    , 100
+    , 19537
+    , 32
+    , 175354
+    , 32
+    , 46417
+    , 4
+    , 221973
+    , 511
+    , 0
+    , 1
+    , 89141
+    , 32
+    , 497525
+    , 14068
+    , 4
+    , 2
+    , 196500
+    , 453240
+    , 220
+    , 0
+    , 1
+    , 1
+    , 1000
+    , 28662
+    , 4
+    , 2
+    , 245000
+    , 216773
+    , 62
+    , 1
+    , 1060367
+    , 12586
+    , 1
+    , 208512
+    , 421
+    , 1
+    , 187000
+    , 1000
+    , 52998
+    , 1
+    , 80436
+    , 32
+    , 43249
+    , 32
+    , 1000
+    , 32
+    , 80556
+    , 1
+    , 57667
+    , 4
+    , 1000
+    , 10
+    , 197145
+    , 156
+    , 1
+    , 197145
+    , 156
+    , 1
+    , 204924
+    , 473
+    , 1
+    , 208896
+    , 511
+    , 1
+    , 52467
+    , 32
+    , 64832
+    , 32
+    , 65493
+    , 32
+    , 22558
+    , 32
+    , 16563
+    , 32
+    , 76511
+    , 32
+    , 196500
+    , 453240
+    , 220
+    , 0
+    , 1
+    , 1
+    , 69522
+    , 11687
+    , 0
+    , 1
+    , 60091
+    , 32
+    , 196500
+    , 453240
+    , 220
+    , 0
+    , 1
+    , 1
+    , 196500
+    , 453240
+    , 220
+    , 0
+    , 1
+    , 1
+    , 1159724
+    , 392670
+    , 0
+    , 2
+    , 806990
+    , 30482
+    , 4
+    , 1927926
+    , 82523
+    , 4
+    , 265318
+    , 0
+    , 4
+    , 0
+    , 85931
+    , 32
+    , 205665
+    , 812
+    , 1
+    , 1
+    , 41182
+    , 32
+    , 212342
+    , 32
+    , 31220
+    , 32
+    , 32696
+    , 32
+    , 43357
+    , 32
+    , 32247
+    , 32
+    , 38314
+    , 32
+    , 35190005
+    , 10
+    , 57996947
+    , 18975
+    , 10
+    , 39121781
+    , 32260
+    , 10
+    , 23000
+    , 100
+    , 23000
+    , 100
+    , 832808
+    , 18
+    , 3209094
+    , 6
+    , 331451
+    , 1
+    , 65990684
+    , 23097
+    , 18
+    , 114242
+    , 18
+    , 94393407
+    , 87060
+    , 18
+    , 16420089
+    , 18
+    , 2145798
+    , 36
+    , 3795345
+    , 12
+    , 889023
+    , 1
+    , 204237282
+    , 23271
+    , 36
+    , 129165
+    , 36
+    , 189977790
+    , 85902
+    , 36
+    , 33012864
+    , 36
+    , 388443360
+    , 1
+    , 401885761
+    , 72
+    , 2331379
+    , 72
+    , 1927926
+    , 82523
+    , 4
+    , 117366
+    , 10475
+    , 4
+    , 1292075
+    , 24469
+    , 74
+    , 0
+    , 1
+    , 936157
+    , 49601
+    , 237
+    , 0
+    , 1
+    ]
+
+pv3CostModel =
+    case L.mkCostModelsLenient plutusV3CostModel >>= Map.lookup L.PlutusV3 . L.costModelsValid of
+        Nothing -> error "Incorrect cost model"
+        Just cm -> cm
+
+updatedConwayGenesis :: ConwayGenesis StandardCrypto
+updatedConwayGenesis =
+    let upPParams :: UpgradeConwayPParams Identity
+        upPParams =
+            UpgradeConwayPParams
+                { ucppPoolVotingThresholds = poolVotingThresholds
+                , ucppDRepVotingThresholds = drepVotingThresholds
+                , ucppCommitteeMinSize = 0
+                , ucppCommitteeMaxTermLength = EpochInterval 200
+                , ucppGovActionLifetime = EpochInterval 2 -- One Epoch
+                , ucppGovActionDeposit = Coin 1_000_000
+                , ucppDRepDeposit = Coin 1_000_000
+                , ucppDRepActivity = EpochInterval 100
+                , ucppMinFeeRefScriptCostPerByte = 0 %! 1 -- FIXME GARBAGE VALUE
+                , ucppPlutusV3CostModel = ucppPlutusV3CostModel $ cgUpgradePParams CTN.defaultConwayGenesis
+                }
+        -- ucppPlutusV3CostModel $ cgUpgradePParams CTN.defaultConwayGenesis
+        drepVotingThresholds =
+            DRepVotingThresholds
+                { dvtMotionNoConfidence = 1 %! 10
+                , dvtCommitteeNormal = 1 %! 10
+                , dvtCommitteeNoConfidence = 1 %! 10
+                , dvtUpdateToConstitution = 1 %! 10
+                , dvtHardForkInitiation = 1 %! 10
+                , dvtPPNetworkGroup = 1 %! 10
+                , dvtPPEconomicGroup = 1 %! 10
+                , dvtPPTechnicalGroup = 1 %! 10
+                , dvtPPGovGroup = 1 %! 10
+                , dvtTreasuryWithdrawal = 1 %! 10
+                }
+        poolVotingThresholds =
+            PoolVotingThresholds
+                { pvtMotionNoConfidence = 1 %! 10
+                , pvtCommitteeNormal = 1 %! 10
+                , pvtCommitteeNoConfidence = 1 %! 10
+                , pvtHardForkInitiation = 1 %! 10
+                , pvtPPSecurityGroup = 1 %! 10
+                }
+     in ConwayGenesis
+            { cgUpgradePParams = upPParams
+            , cgConstitution = DefaultClass.def
+            , cgCommittee = DefaultClass.def
+            , cgDelegs = mempty
+            , cgInitialDReps = mempty
+            }
+
 -- | Start a testnet with provided testnet options (including era and protocol version)
 startTestnet ::
     TestEnvironmentOptions era ->
@@ -196,7 +511,7 @@ startTestnet TestnetOptions{..} tempAbsBasePath = do
     currentTime <- liftIO Time.getCurrentTime
     let sg = CTN.defaultShelleyGenesis currentTime testnetCardanoOptions
         ag = U.unsafeFromRight CTN.defaultAlonzoGenesis
-        cg = CTN.defaultConwayGenesis
+        cg = updatedConwayGenesis
     tn <- CTN.cardanoTestnet testnetCardanoOptions conf currentTime sg ag cg
     -- needed to avoid duplication of directory in filepath
     let tmpAbsBasePath' = CTN.makeTmpBaseAbsPath $ CTN.tempAbsPath conf
@@ -252,18 +567,15 @@ connectToLocalNode ::
         )
 connectToLocalNode TestnetOptions{} _ = error "TestnetOptions not supported"
 connectToLocalNode LocalNodeOptions{..} tempAbsPath = do
-    HE.createDirectoryIfMissing (tempAbsPath </> "utxo-keys")
-    HE.createDirectoryIfMissing (tempAbsPath </> "sockets")
-
-    HE.createFileLink (localNodeEnvDir </> "test2.skey") (tempAbsPath </> "utxo-keys/utxo2.skey")
-    HE.createFileLink (localNodeEnvDir </> "test2.vkey") (tempAbsPath </> "utxo-keys/utxo2.vkey")
-    HE.createFileLink (localNodeEnvDir </> "test1.skey") (tempAbsPath </> "utxo-keys/utxo1.skey")
-    HE.createFileLink (localNodeEnvDir </> "test1.vkey") (tempAbsPath </> "utxo-keys/utxo1.vkey")
-    HE.createFileLink (localNodeEnvDir </> "ipc/node.socket") (tempAbsPath </> "sockets/node.socket")
-
-    let socketPathAbs = C.File $ tempAbsPath </> "sockets/node.socket"
+    -- HE.createDirectoryIfMissing (tempAbsPath </> "utxo-keys")
+    -- HE.createDirectoryIfMissing (localNodeEnvDir </> "sockets")
+    -- HE.createFileLink (localNodeEnvDir </> "test2.skey") (tempAbsPath </> "utxo-keys/utxo2.skey")
+    -- HE.createFileLink (localNodeEnvDir </> "test2.vkey") (tempAbsPath </> "utxo-keys/utxo2.vkey")
+    -- HE.createFileLink (localNodeEnvDir </> "test1.skey") (tempAbsPath </> "utxo-keys/utxo1.skey")
+    -- HE.createFileLink (localNodeEnvDir </> "test1.vkey") (tempAbsPath </> "utxo-keys/utxo1.vkey")
+    -- HE.createFileLink (localNodeEnvDir </> "socket/pool1/sock") (localNodeEnvDir </> "sockets/node.socket")
+    let socketPathAbs = C.File $ localNodeEnvDir </> "socket/pool1/sock"
         networkId = C.Testnet $ C.NetworkMagic $ fromIntegral localNodeTestnetMagic
-
     -- Boilerplate codecs used for protocol serialisation. The number of epochSlots is specific
     -- to each blockchain instance. This value is used by cardano mainnet/testnet and only applies
     -- to the Byron era.

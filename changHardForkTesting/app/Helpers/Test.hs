@@ -6,6 +6,7 @@ module Helpers.Test (
     failure,
     success,
     integrationRetryWorkspace,
+    integrationClusterWorkspace,
 ) where
 
 import Cardano.Testnet qualified as CTN
@@ -14,6 +15,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.IORef (IORef)
 import Data.Maybe (isNothing)
 import Data.Time.Clock.POSIX qualified as Time
+import Debug.Trace qualified as Debug
 import GHC.IORef (atomicModifyIORef')
 import GHC.Stack (HasCallStack, callStack, prettyCallStack, withFrozenCallStack)
 import GHC.Stack qualified as GHC
@@ -26,6 +28,7 @@ import Helpers.Testnet qualified as TN
 import System.Environment qualified as IO
 import System.Info qualified as IO
 import Text.Printf (printf)
+import Utils (consoleLog)
 
 integrationRetryWorkspace ::
     (HasCallStack) => Int -> FilePath -> (FilePath -> H.Integration ()) -> H.Property
@@ -36,6 +39,16 @@ integrationRetryWorkspace n workspaceName f = GHC.withFrozenCallStack $
 
 setDarwinTmpdir :: IO ()
 setDarwinTmpdir = when (IO.os == "darwin") $ IO.setEnv "TMPDIR" "/tmp"
+
+integrationClusterWorkspace ::
+    (HasCallStack) => Int -> FilePath -> (FilePath -> H.Integration ()) -> H.Property
+integrationClusterWorkspace n workspaceName f = GHC.withFrozenCallStack $
+    CTN.integration $
+        H.retry n $ \i ->
+            (liftIO setTestnetTmpDir >>) $ H.runFinallies $ H.workspace (workspaceName <> "-" <> show i) f
+
+setTestnetTmpDir :: IO ()
+setTestnetTmpDir = when (IO.os == "darwin") $ IO.setEnv "TMPDIR" "/home/reeshav/chang-hardfork-testing/.cluster"
 
 runTest ::
     (MonadIO m, MonadTest m) =>
