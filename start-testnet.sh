@@ -1,4 +1,3 @@
-#!/bin/bash.
 
 # Check if .cluster folder exists and remove it if it does
 if [ -d ".cluster" ]; then

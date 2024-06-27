@@ -48,7 +48,9 @@ integrationClusterWorkspace n workspaceName f = GHC.withFrozenCallStack $
             (liftIO setTestnetTmpDir >>) $ H.runFinallies $ H.workspace (workspaceName <> "-" <> show i) f
 
 setTestnetTmpDir :: IO ()
-setTestnetTmpDir = when (IO.os == "darwin") $ IO.setEnv "TMPDIR" "/home/reeshav/chang-hardfork-testing/.cluster"
+setTestnetTmpDir = do
+    cluster <- liftIO TN.clusterFilePath
+    when (IO.os == "darwin") $ IO.setEnv "TMPDIR" cluster
 
 runTest ::
     (MonadIO m, MonadTest m) =>

@@ -28,7 +28,7 @@ import Test.Tasty.Hedgehog (testProperty)
 import Test.V3.EfficiencyTests
 import Test.V3.PlutusTests
 import Test.V3.StakingTests
-import Test.V3.Testnet (clusterFilePath)
+import Test.V3.Testnet
 import Text.XML.Light.Output
 import Prelude hiding (mapM)
 
@@ -148,16 +148,17 @@ referenceInputTests resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPat
 
 pv9GovernanceBenchmark :: IORef [TestResult] -> H.Property
 pv9GovernanceBenchmark resultsRef = integrationRetryWorkspace 0 "pv9" $ \tempAbsPath -> do
-    let options = TN.localNodeOptionsConway
+    cluster <- liftIO TN.clusterFilePath
+    let options = TN.localNodeOptionsConway cluster
         ceo = toConwayEraOnwards $ TN.eraFromOptions options
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
-        TN.setupTestEnvironment options clusterFilePath
+        TN.setupTestEnvironment options cluster
     preTestnetTime <- liftIO Time.getCurrentTime
     shelleyWallets <- generateShelleyWallet
     dReps <- generateDRepKeyCredentialsAndCertificate ceo
     ccMembers <- generateCommitteeKeysAndCertificate ceo
     stakePools <- mapM id $ take 6 $ repeat $ generateStakePoolKeyCredentialsAndCertificate ceo networkId
-    let testParams = TestParams localNodeConnectInfo pparams networkId clusterFilePath (Just preTestnetTime)
+    let testParams = TestParams localNodeConnectInfo pparams networkId cluster (Just preTestnetTime)
         run testInfo = runTest testInfo resultsRef options testParams
     sequence_
         [ -- commenting this one out for now, because it takes a lot of time

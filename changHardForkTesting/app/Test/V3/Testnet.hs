@@ -12,6 +12,8 @@ import Helpers.Test
 import Helpers.TestResults
 import Helpers.Testnet qualified as TN
 import Helpers.Utils qualified as U
+import System.Directory (getCurrentDirectory)
+import System.FilePath ((</>))
 import Test.Tasty
 import Test.Tasty.Hedgehog
 import Utils
@@ -19,15 +21,13 @@ import Utils
 data TestnetRef = TestnetRef
     {testnetResultsRef :: IORef [TestResult]}
 
-clusterFilePath :: FilePath
-clusterFilePath = "/home/reeshav/chang-hardfork-testing/.cluster"
-
 testnetTest :: IORef [TestResult] -> H.Property
 testnetTest resultsRef = integrationClusterWorkspace 0 "testnet" $ \tempAbsPath -> do
     let options = TN.testnetOptionsConway9Governance
+    cluster <- liftIO $ TN.clusterFilePath
     (localNodeConnectInfo, pparams, networkId, mPoolNodes) <-
-        TN.setupTestEnvironment options clusterFilePath
-    consoleLog ("\n\nStarted testnet on " ++ clusterFilePath)
+        TN.setupTestEnvironment options cluster
+    consoleLog ("\n\nStarted testnet on " ++ cluster)
     consoleLog ("\nNetworkId: " ++ (case networkId of Testnet (NetworkMagic num) -> show num))
     liftIO $ threadDelay (24 * 60 * 60 * 1000000) -- lasts one day
     U.anyLeftFail_ $ TN.cleanupTestnet mPoolNodes

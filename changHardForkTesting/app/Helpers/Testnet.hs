@@ -70,6 +70,7 @@ import Helpers.Rational ((%!))
 import Helpers.Utils (maybeReadAs)
 import Helpers.Utils qualified as U
 import Prettyprinter (Doc)
+import System.Directory
 import System.Directory qualified as IO
 import System.FilePath ((</>))
 import System.Posix.Signals (sigKILL, signalProcess)
@@ -83,6 +84,11 @@ import Testnet.Defaults qualified as CTN
 import Testnet.Runtime qualified as CTN
 import Testnet.Types qualified as CTN
 import Utils (consoleLog)
+
+clusterFilePath :: IO FilePath
+clusterFilePath = do
+    currentDir <- getCurrentDirectory
+    return $ currentDir </> ".cluster"
 
 data TestEnvironmentOptions era
     = TestnetOptions
@@ -152,12 +158,12 @@ shortEpochConwayTestnetOptions =
                 }
         }
 
-localNodeOptionsConway :: TestEnvironmentOptions C.ConwayEra
-localNodeOptionsConway =
+localNodeOptionsConway :: FilePath -> TestEnvironmentOptions C.ConwayEra
+localNodeOptionsConway filePath =
     LocalNodeOptions
         { localNodeEra = C.ConwayEra
         , localNodeProtocolVersion = 9
-        , localNodeEnvDir = "/home/reeshav/chang-hardfork-testing/.cluster"
+        , localNodeEnvDir = filePath
         , localNodeTestnetMagic = 42
         }
 
